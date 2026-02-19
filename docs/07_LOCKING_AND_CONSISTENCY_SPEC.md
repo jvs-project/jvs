@@ -1,76 +1,76 @@
-# Locking & Consistency Spec (v6.1)
+# Locking & Consistency Spec (v6.2)
 
 ## Goals
-- Enforce single-writer semantics for `exclusive` worktrees.
-- Make write safety provable under crashes and stale holders.
-- Expose snapshot consistency level explicitly to users and tooling.
+- Enforce SWMR for `exclusive` worktrees.
+- Prevent stale-holder writes via fencing.
+- Keep deterministic behavior under bounded clock skew.
 
-## Lock scope and storage
-- Locks are repository-local files under `repo/.jvs/locks/`.
-- Each `exclusive` worktree has exactly one active writer lock.
-- `shared` worktrees do not enforce SWMR and are marked high-risk.
+## Lock scope
+- Locks are repo-local files in `.jvs/locks/`.
+- One active writer lock per exclusive worktree.
+- `shared` mode does not provide SWMR guarantees.
 
 ## Lock record schema (MUST)
-Each lock record MUST include:
-- `lock_id` (uuid)
+- `lock_id`
 - `worktree_id`
 - `holder_id` (`host:user:pid:start_time`)
+- `holder_nonce`
+- `session_id`
+- `acquire_seq`
 - `created_at`
 - `last_renewed_at`
+- `lease_duration_ms`
+- `renew_interval_ms`
+- `max_clock_skew_ms`
+- `steal_grace_ms`
 - `lease_expires_at`
-- `fencing_token` (monotonic integer)
+- `fencing_token`
+
+## Default policy values
+- `lease_duration_ms = 30000`
+- `renew_interval_ms = 10000`
+- `max_clock_skew_ms = 2000`
+- `steal_grace_ms = 1000`
 
 ## Protocol (MUST)
 ### Acquire
-- Create lock atomically.
-- If lock exists and not expired, return lock conflict.
-- If expired, acquisition MUST use steal flow.
+- create lock atomically
+- if active non-expired lock exists, return `E_LOCK_CONFLICT`
+- if expired plus skew+grace, steal flow applies and increments fencing token
 
 ### Renew
-- Only current holder can renew.
-- Renew extends `lease_expires_at`.
-- Renew failure MUST stop write operations for that holder.
+- only holder with matching `holder_nonce` and `session_id` may renew
+- renewal extends lease by `lease_duration_ms`
+- if renewal commit fails, holder must stop writes immediately
 
 ### Steal
-- Allowed only when current lock is expired.
-- New lock MUST increment `fencing_token`.
-- New holder MUST record steal metadata in audit log.
+- allowed only when:
+  `now > lease_expires_at + max_clock_skew_ms + steal_grace_ms`
+- new holder increments fencing token and `acquire_seq`
+- audit event is mandatory
 
 ### Release
-- Only current holder can release.
-- Release by non-holder MUST fail.
+- only holder with matching nonce/session can release
+- non-holder release fails with `E_LOCK_NOT_HELD`
 
 ## Fencing token rules (MUST)
-- All mutating operations in `exclusive` mode (`snapshot`, `restore --inplace`) MUST validate current `fencing_token` before commit.
-- If token is stale or mismatched, operation MUST fail with non-zero exit and no partial publish.
+- mutating writes in exclusive mode must validate current token before publish commit
+- stale token fails with `E_FENCING_MISMATCH`
+- no partial publish after fencing failure
 
 ## Snapshot consistency levels
-### `quiesced` (default, recommended)
-- Snapshot source MUST be in a quiesced window.
-- In `exclusive` mode this means holder has lock and no concurrent payload writer.
-- Descriptor MUST store `consistency_level=quiesced`.
+### `quiesced` (default)
+- requires quiesced source window
+- in exclusive mode, holder ensures no concurrent payload writers
 
 ### `best_effort`
-- Snapshot can run without guaranteed quiesced window.
-- Descriptor MUST store `consistency_level=best_effort`.
-- `history` and `info --json` MUST surface a warning flag for these snapshots.
+- snapshot allowed without strict quiesce
+- descriptor carries risk label
+- `history`/`info` JSON exposes risk flag
 
-## Operation requirements
-- `snapshot`: requires valid lock + fencing token in `exclusive`; allowed without lock in `shared` but tagged by consistency level.
-- `history`: lock-free and read-only.
-- `restore` (safe mode): lock-free because it creates a new worktree.
-- `restore --inplace`: requires valid lock + fencing token in `exclusive`; disabled by default in `shared`.
+## READY visibility
+Only READY snapshots are visible.
+Incomplete snapshots/intents are hidden and recoverable by `doctor --strict`.
 
-## READY semantics
-- Only snapshots with `.READY` are visible to `history` and `restore`.
-- Partial snapshots without `.READY` are ignored.
-- `doctor --strict` MUST report and optionally clean orphan tmp/intents.
-
-## Error classes (MUST)
-Implementations MUST expose stable machine-readable error classes:
-- `E_LOCK_CONFLICT`
-- `E_LOCK_EXPIRED`
-- `E_LOCK_NOT_HELD`
-- `E_FENCING_MISMATCH`
-- `E_CONSISTENCY_UNAVAILABLE`
-- `E_PARTIAL_SNAPSHOT`
+## Error classes
+`E_LOCK_CONFLICT`, `E_LOCK_EXPIRED`, `E_LOCK_NOT_HELD`, `E_FENCING_MISMATCH`, `E_CLOCK_SKEW_EXCEEDED`, `E_CONSISTENCY_UNAVAILABLE`, `E_PARTIAL_SNAPSHOT`.

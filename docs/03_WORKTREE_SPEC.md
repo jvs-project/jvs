@@ -1,11 +1,9 @@
-# Worktree Spec (v6.1)
+# Worktree Spec (v6.2)
 
-Mode C remains: default isolated (`exclusive`), optional `shared`.
+Default mode is isolated (`exclusive`). `shared` is opt-in and high-risk.
 
 ## Worktree identity
-A worktree is identified by directory path plus stable id metadata in `.jvs-worktree/`.
-
-Required files:
+Each worktree contains:
 ```
 <worktree>/.jvs-worktree/
 ├── id
@@ -16,20 +14,23 @@ Required files:
 
 ## Isolation modes
 ### `exclusive` (default)
-- Single writer enforced by lock + lease + fencing token.
-- Required for deterministic `quiesced` snapshot behavior.
+- single writer enforced by lock/lease/fencing
+- required for deterministic `quiesced` snapshot operation
 
 ### `shared` (high-risk)
-- Multiple writers allowed.
-- No conflict resolution in v0.x.
-- `restore --inplace` disabled by default.
-- Snapshots from shared mode SHOULD be labeled `best_effort` unless explicit quiesce policy is active.
+- multiple writers allowed
+- no conflict-resolution semantics in v0.x
+- `restore --inplace` disabled by default
+- snapshots SHOULD be tagged `best_effort` unless an explicit quiesce policy is active
 
-## Naming rules
-- Worktree names MUST be filesystem-safe identifiers.
-- Reserved auto-restore prefix: `restore-`.
+## Naming and path rules (MUST)
+- Name charset: `[a-zA-Z0-9._-]+`
+- Name MUST NOT contain separators, `..`, control chars, or empty segments
+- Name MUST normalize to NFC before validation
+- Canonical resolved path MUST remain under `repo/worktrees/`
+- Operations MUST fail on symlink escape detection
 
 ## Lifecycle
-create -> active -> snapshot(s) -> optional restore -> remove
+create -> active -> snapshot -> restore(optional) -> remove
 
-Removing a worktree does not delete snapshots; snapshot retention is managed by GC policy.
+Removing worktree payload does not remove snapshots. Retention is controlled by GC policy.

@@ -1,53 +1,62 @@
-# Migration & Backup (v6.1)
+# Migration & Backup (v6.2)
 
-JVS does not implement remote/push/pull. Replication is done with JuiceFS tooling.
+JVS does not provide remote replication. Use JuiceFS replication tools.
 
-## Recommended method: `juicefs sync`
-`juicefs sync` supports include/exclude rules and incremental transfer.
+## Recommended method
+Use `juicefs sync` for repository migration.
 
 ## Pre-migration gates (MUST)
-1. Freeze writers or stop agents.
-2. Ensure no active valid writer locks for target repo.
-3. Run:
+1. freeze writers and stop agent jobs
+2. ensure no active writer locks
+3. run:
 ```bash
 jvs doctor --strict
 jvs verify --all
 ```
-4. Optionally create final quiesced snapshots for critical worktrees.
+4. take final `quiesced` snapshots for critical worktrees
+
+## Runtime-state policy (MUST)
+Runtime state is non-portable and must not be migrated as authoritative state:
+- `.jvs/locks/`
+- active `.jvs/intents/`
+
+Destination MUST rebuild runtime state:
+```bash
+jvs doctor --strict --repair-runtime
+```
 
 ## Migration flow
-1. Mount source and destination volumes.
+1. mount source and destination volumes
+2. sync repository excluding runtime state
 ```bash
-juicefs mount <SRC_META> /mnt/src -d
-juicefs mount <DST_META> /mnt/dst -d
+juicefs sync /mnt/src/myrepo/ /mnt/dst/myrepo/ \
+  --exclude '.jvs/locks/**' \
+  --exclude '.jvs/intents/**' \
+  --update --threads 16
 ```
-2. Sync a repository directory.
-```bash
-juicefs sync /mnt/src/myrepo/ /mnt/dst/myrepo/ --update --threads 16
-```
-3. Post-migration validation.
+3. validate destination
 ```bash
 cd /mnt/dst/myrepo/main
-jvs doctor --strict
+jvs doctor --strict --repair-runtime
 jvs verify --all
 jvs history --limit 10
 ```
 
 ## What to sync
-Mandatory for full historical recovery:
-- `.jvs/` (snapshots, descriptors, locks, intents, audit, gc)
+Portable history state:
+- `.jvs/snapshots/`
+- `.jvs/descriptors/`
+- `.jvs/refs/`
+- `.jvs/audit/`
+- `.jvs/trust/`
+- `.jvs/gc/`
 
-Optional:
-- `main/` payload
-- selected `worktrees/` payloads (often ephemeral)
+Optional payload state:
+- `main/`
+- selected `worktrees/`
 
-Example excluding ephemeral worktrees:
-```bash
-juicefs sync /mnt/src/myrepo/ /mnt/dst/myrepo/ --exclude 'worktrees/**' --update
-```
-
-## Backup restore drill (SHOULD)
-At regular intervals, perform a drill:
-1. Restore backup into a new volume.
-2. Run strict doctor + full verify.
-3. Confirm lineage continuity and recover at least one historical snapshot into a new worktree.
+## Restore drill (SHOULD)
+1. restore backup to fresh volume
+2. run strict doctor + verify
+3. restore at least one historical snapshot into new worktree
+4. record drill result in operations log

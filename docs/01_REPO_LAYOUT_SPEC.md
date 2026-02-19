@@ -1,9 +1,9 @@
-# Repository Layout Spec (v6.1)
+# Repository Layout Spec (v6.2)
 
 ## Definitions
-- Volume: mounted filesystem (JuiceFS preferred).
-- Repository: directory with `.jvs/` and standard JVS layout.
-- Worktree: directory containing workspace payload.
+- Volume: mounted filesystem (JuiceFS preferred)
+- Repository: directory containing `.jvs/` and standard JVS layout
+- Worktree: payload directory with `.jvs-worktree/` marker
 
 ## Standard on-disk layout (MUST)
 ```
@@ -13,10 +13,11 @@ repo/
 │   ├── snapshots/
 │   ├── descriptors/
 │   ├── refs/
-│   ├── locks/
-│   ├── intents/        # in-flight snapshot/restore intents
+│   ├── locks/          # runtime state; not migrated as-is
+│   ├── intents/        # in-flight operations; not migrated as-is
 │   ├── audit/          # append-only audit events
-│   ├── gc/             # gc plans, pins, execution metadata
+│   ├── trust/          # keyring, trust policy, signature metadata
+│   ├── gc/             # retention policy, pin sets, gc plans/results
 │   └── index.sqlite    # optional, rebuildable
 │
 ├── main/
@@ -29,11 +30,17 @@ repo/
         └── <workspace payload...>
 ```
 
-## Invariants
-- `.jvs/` MUST NOT be inside any worktree payload root.
-- A worktree payload root MUST NOT contain `.jvs/` or `worktrees/`.
-- Worktrees are real directories selected by `cd`.
+## Invariants (MUST)
+- `.jvs/` MUST NOT exist under any payload root.
+- Payload roots MUST NOT contain `worktrees/`.
+- Worktree roots MUST resolve to canonical paths under repo root.
+- All control-plane paths MUST reject symlink traversal outside repo root.
+
+## Portability classes
+- Portable history state: `snapshots/`, `descriptors/`, `refs/`, `audit/`, `trust/`, `gc/`.
+- Rebuildable cache state: `index.sqlite`.
+- Runtime state (non-portable): `locks/`, active `intents/`.
 
 ## Why `repo/main/` exists
-JuiceFS `clone` is 1:1 directory clone with no exclude filter.
-`repo/main/` keeps a clean payload source so snapshots never include control-plane directories.
+JuiceFS clone performs 1:1 directory clone without excludes.
+Separating `main/` from `.jvs/` guarantees clean payload snapshot scope.
