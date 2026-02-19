@@ -1,4 +1,4 @@
-# Snapshot Engine Spec (v6.2)
+# Snapshot Engine Spec (v6.4)
 
 JVS provides one snapshot command with pluggable engines.
 
@@ -20,6 +20,11 @@ Recursive deep copy.
 3. fallback -> `copy`
 
 Override: `JVS_SNAPSHOT_ENGINE=juicefs-clone|reflink-copy|copy`
+
+Engine performance characteristics (Constitution §1):
+- `juicefs-clone`: O(1) via CoW metadata operation (independent of file count and data size)
+- `reflink-copy`: O(n) file-count walk, but O(1) per-file data copy via reflink (no data duplication)
+- `copy`: O(n) deep copy — graceful fallback when CoW is unavailable
 
 ## Metadata behavior declaration (MUST)
 Implementation MUST define behavior for:
@@ -45,7 +50,7 @@ If preservation is degraded, command MUST fail or write explicit degraded fields
 8. Write `.READY` in snapshot tmp with descriptor checksum and signing key id; fsync.
 9. Rename snapshot tmp -> `.jvs/snapshots/<id>/`; fsync snapshots parent dir.
 10. Rename descriptor tmp -> `.jvs/descriptors/<id>.json`; fsync descriptors parent dir.
-11. Update `head_snapshot` last; fsync `.jvs-worktree/` metadata dir.
+11. Update `head_snapshot_id` in `.jvs/worktrees/<name>/config.json` last; fsync parent dir.
 12. Mark intent completed; append audit event.
 
 Success return is allowed only after steps 1-12 complete.
@@ -71,9 +76,32 @@ Required contents:
 - payload root hash
 - signing key id
 
+## Payload root hash computation (MUST)
+The `payload_root_hash` is a deterministic hash over the snapshot payload tree.
+
+### Algorithm
+1. Walk the materialized snapshot directory recursively in **byte-order sorted** path order.
+2. For each entry, compute a record: `<type>:<relative_path>:<metadata>:<content_hash>`.
+   - `type`: `file`, `symlink`, or `dir`.
+   - `relative_path`: path relative to snapshot root, using `/` separator, NFC normalized.
+   - For `file`: `content_hash` = SHA-256 of file content; `metadata` = `mode:size`.
+   - For `symlink`: `content_hash` = SHA-256 of link target string; `metadata` = empty.
+   - For `dir`: `content_hash` = empty; `metadata` = empty. Dirs are included for structure completeness.
+3. Concatenate all records with newline separator.
+4. Compute SHA-256 of the concatenated result.
+
+### Properties
+- Deterministic: same payload always produces same hash.
+- Detects file content changes, permission changes, added/removed files, and symlink target changes.
+- Empty directories are included in the hash.
+
 ## Crash recovery
-- orphan `*.tmp` and incomplete intents are non-visible.
+- Orphan `*.tmp` and incomplete intents are non-visible.
+- **Head pointer orphan**: if a READY snapshot exists with a descriptor but `head_snapshot_id` in `.jvs/worktrees/<name>/config.json` does not reference it, `jvs doctor --strict` MUST detect this as `head_orphan` and offer `advance_head` repair to point head to the latest READY snapshot in the lineage chain.
 - `jvs doctor --strict` MUST classify repair actions:
-  - `clean_tmp`
-  - `rebuild_index`
-  - `audit_repair`
+  - `clean_tmp` — remove orphan `.tmp` snapshot and descriptor files
+  - `rebuild_index` — regenerate `index.sqlite` from snapshot/descriptor state
+  - `audit_repair` — recompute audit hash chain over present records (does not recover missing records; missing records indicate tampering and require escalation)
+  - `advance_head` — advance head to latest READY snapshot when head is stale
+  - `clean_locks` — remove expired lock files (runtime state rebuild)
+  - `clean_intents` — remove completed or abandoned intent files (runtime state rebuild)

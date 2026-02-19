@@ -13,8 +13,9 @@ JVS versions full workspaces as snapshots and provides navigable, verifiable, ta
 - No `remote`/`push`/`pull` in JVS
 - No backend credential/storage config in JVS
 - No diff/staging/merge object model in v0.x
+⚖️ Project Constitution: See /docs/CONSTITUTION.md before proposing new features.
 
-## Core guarantees (v6.2)
+## Core guarantees (v6.4)
 - Safe default restore: `jvs restore <id>` creates a new worktree
 - Strong exclusive writer safety: lock + lease + fencing
 - Strong default verification: descriptor checksum + payload hash + signature chain
@@ -48,4 +49,4 @@ jvs conformance run --profile release
 Use `juicefs sync` and exclude runtime state (`.jvs/locks`, active `.jvs/intents`).
 See `docs/18_MIGRATION_AND_BACKUP.md`.
 
-**Spec version:** v6.2 (2026-02-19)
+**Spec version:** v6.4 (2026-02-20)

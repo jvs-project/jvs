@@ -1,4 +1,4 @@
-# Migration & Backup (v6.2)
+# Migration & Backup (v6.4)
 
 JVS does not provide remote replication. Use JuiceFS replication tools.
 
@@ -44,6 +44,8 @@ jvs history --limit 10
 
 ## What to sync
 Portable history state:
+- `.jvs/format_version`
+- `.jvs/worktrees/`
 - `.jvs/snapshots/`
 - `.jvs/descriptors/`
 - `.jvs/refs/`

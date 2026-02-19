@@ -1,4 +1,4 @@
-# GC Spec (v6.2)
+# GC Spec (v6.3)
 
 ## Goal
 Control snapshot storage growth without breaking recoverability.
@@ -16,6 +16,7 @@ Non-deletable snapshots:
 - ancestors reachable from protected heads
 - pinned snapshots
 - snapshots referenced by active intents
+- snapshots referenced by refs (`.jvs/refs/`)
 
 ## Pin model
 Pin fields:

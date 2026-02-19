@@ -1,11 +1,28 @@
-# Snapshot Scope & Lineage Spec (v6.2)
+# Snapshot Scope & Lineage Spec (v6.4)
+
+## Snapshot ID generation (MUST)
+
+Format: `<timestamp_ms>-<random_hex8>`
+- `<timestamp_ms>`: Unix epoch milliseconds at snapshot creation, zero-padded to 13 digits.
+- `<random_hex8>`: 8 lowercase hex characters from cryptographic random source.
+- Example: `1708300800000-a3f7c1b2`
+
+Properties:
+- Lexicographic sort approximates creation order.
+- Collision probability is negligible (32-bit random within same millisecond).
+- `shortid` (used in restore auto-naming) is the first 8 characters of the full ID.
+- Snapshot IDs MUST be treated as opaque strings by consumers; ordering is advisory only.
 
 ## Scope (MUST)
 A snapshot captures only the current worktree payload root:
 - inside `repo/main/` -> source `repo/main/`
 - inside `repo/worktrees/<name>/` -> source that worktree root
 
-Snapshots MUST NOT include `.jvs/` or other worktree payload roots.
+Payload roots contain pure user data (no control-plane artifacts), so no exclusion logic is required.
+
+Snapshots MUST NOT include:
+- `.jvs/` directory
+- other worktree payload roots
 
 ## Storage and immutability (MUST)
 Published snapshots live at:
@@ -37,6 +54,21 @@ Required fields:
 - `signed_at`
 - `tamper_evidence_state` (`trusted|untrusted|tampered`)
 - `integrity_state` (`verified|unverified|corrupt`)
+
+## Descriptor checksum coverage (MUST)
+`descriptor_checksum` is computed over all descriptor fields **except**:
+- `descriptor_checksum` itself
+- `signature`
+- `signing_key_id`
+- `signed_at`
+- `tamper_evidence_state`
+- `integrity_state`
+
+Computation:
+1. Serialize covered fields as canonical JSON (sorted keys, no whitespace, UTF-8, no trailing zeros in numbers).
+2. Compute SHA-256 of the serialized bytes.
+
+This allows the checksum to be computed before signing, and the signature to cover the checksum.
 
 ## Signature coverage (MUST)
 Descriptor signature MUST cover at least:

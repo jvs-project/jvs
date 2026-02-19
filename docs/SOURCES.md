@@ -16,9 +16,10 @@ The following primary sources inform JVS behavior and constraints.
 ## Security references
 - NIST Digital Signature Standard (FIPS 186-5): https://csrc.nist.gov/pubs/fips/186-5/final
 - NIST Secure Software Development Framework: https://csrc.nist.gov/Projects/ssdf
+- Ed25519 (RFC 8032): https://datatracker.ietf.org/doc/html/rfc8032
 
 ## Documentation policy
 - Each normative claim in specs SHOULD map to one or more links above.
 - Update this file with new source URLs and access date when spec behavior changes.
 
-**Last reviewed:** 2026-02-19
+**Last reviewed:** 2026-02-20

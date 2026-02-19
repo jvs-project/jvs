@@ -1,7 +1,7 @@
 # Overview
 
-**Document set:** JVS v6.2 (JuiceFS-first, snapshot-first)
-**Date:** 2026-02-19
+**Document set:** JVS v6.4 (JuiceFS-first, snapshot-first)
+**Date:** 2026-02-20
 
 ## Core idea
 JVS versions workspaces by full snapshots of a single worktree payload root.

@@ -1,4 +1,4 @@
-# Threat Model (v6.2)
+# Threat Model (v6.3)
 
 ## Assets
 - snapshot payloads
