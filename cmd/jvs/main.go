@@ -1,11 +1,7 @@
 package main
 
-import (
-	"fmt"
-	"os"
-)
+import "github.com/jvs-project/jvs/internal/cli"
 
 func main() {
-	fmt.Fprintln(os.Stderr, "jvs: not yet implemented")
-	os.Exit(1)
+	cli.Execute()
 }
