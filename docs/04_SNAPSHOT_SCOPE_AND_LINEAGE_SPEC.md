@@ -1,4 +1,4 @@
-# Snapshot Scope & Lineage Spec (v6.5)
+# Snapshot Scope & Lineage Spec (v6.7)
 
 ## Snapshot ID generation (MUST)
 
@@ -39,15 +39,14 @@ Path:
 
 Required fields:
 - `snapshot_id`
-- `worktree_id`
-- `parent_snapshot_id` (or null)
+- `worktree_name`
+- `parent_id` (or null)
 - `created_at`
 - `note` (optional)
+- `tags` (optional array)
 - `engine`
-- `consistency_level` (`quiesced|best_effort`)
-- `fencing_token` (nullable only when lockless mode is valid)
-- `descriptor_checksum` (`algo`, `value`)
-- `payload_root_hash` (`algo`, `value`)
+- `descriptor_checksum`
+- `payload_root_hash`
 - `integrity_state` (`verified|unverified|corrupt`)
 
 ## Descriptor checksum coverage (MUST)
@@ -60,7 +59,7 @@ Computation:
 2. Compute SHA-256 of the serialized bytes.
 
 ## Lineage rules
-- Lineage is per worktree via `parent_snapshot_id` chain.
+- Lineage is per worktree via `parent_id` chain.
 - Restoring an older snapshot into a new worktree starts a new lineage branch.
 - merge/rebase remains out of scope for v0.x.
 

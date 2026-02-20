@@ -8,7 +8,6 @@ import (
 
 	"github.com/jvs-project/jvs/internal/audit"
 	"github.com/jvs-project/jvs/internal/engine"
-	"github.com/jvs-project/jvs/internal/lock"
 	"github.com/jvs-project/jvs/internal/snapshot"
 	"github.com/jvs-project/jvs/internal/worktree"
 	"github.com/jvs-project/jvs/pkg/fsutil"
@@ -86,16 +85,10 @@ func (r *Restorer) SafeRestore(snapshotID model.SnapshotID, name string, parentS
 }
 
 // InplaceRestore replaces the content of an existing worktree with a snapshot.
-// This is dangerous and requires lock + fencing token + reason.
-func (r *Restorer) InplaceRestore(worktreeName string, snapshotID model.SnapshotID, fencingToken int64, reason string) error {
-	// Validate fencing
-	lockMgr := lock.NewManager(r.repoRoot, model.LockPolicy{})
-	if err := lockMgr.ValidateFencing(worktreeName, fencingToken); err != nil {
-		return err
-	}
-
+// This is dangerous and requires force + reason.
+func (r *Restorer) InplaceRestore(snapshotID model.SnapshotID, reason string) error {
 	// Load and verify snapshot
-	_, err := snapshot.LoadDescriptor(r.repoRoot, snapshotID)
+	desc, err := snapshot.LoadDescriptor(r.repoRoot, snapshotID)
 	if err != nil {
 		return fmt.Errorf("load snapshot: %w", err)
 	}
@@ -106,6 +99,7 @@ func (r *Restorer) InplaceRestore(worktreeName string, snapshotID model.Snapshot
 
 	// Get worktree info
 	wtMgr := worktree.NewManager(r.repoRoot)
+	worktreeName := desc.WorktreeName
 	payloadPath := wtMgr.Path(worktreeName)
 
 	// Create backup directory for atomic swap
@@ -118,13 +112,7 @@ func (r *Restorer) InplaceRestore(worktreeName string, snapshotID model.Snapshot
 		return fmt.Errorf("clone to temp: %w", err)
 	}
 
-	// Step 2: Re-validate fencing before swap
-	if err := lockMgr.ValidateFencing(worktreeName, fencingToken); err != nil {
-		os.RemoveAll(tempPath)
-		return err
-	}
-
-	// Step 3: Atomic swap: rename current to backup, temp to payload
+	// Step 2: Atomic swap: rename current to backup, temp to payload
 	if err := fsutil.RenameAndSync(payloadPath, backupPath); err != nil {
 		os.RemoveAll(tempPath)
 		return fmt.Errorf("backup current: %w", err)
@@ -136,13 +124,13 @@ func (r *Restorer) InplaceRestore(worktreeName string, snapshotID model.Snapshot
 		return fmt.Errorf("swap in restored: %w", err)
 	}
 
-	// Step 4: Cleanup backup (async, non-blocking)
+	// Step 3: Cleanup backup (async, non-blocking)
 	go func() {
 		time.Sleep(1 * time.Second)
 		os.RemoveAll(backupPath)
 	}()
 
-	// Step 5: Update head
+	// Step 4: Update head
 	if err := wtMgr.UpdateHead(worktreeName, snapshotID); err != nil {
 		// Don't fail, head update is secondary
 		fmt.Fprintf(os.Stderr, "warning: failed to update head: %v\n", err)

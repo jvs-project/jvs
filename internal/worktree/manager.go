@@ -7,9 +7,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/jvs-project/jvs/internal/lock"
 	"github.com/jvs-project/jvs/internal/repo"
-	"github.com/jvs-project/jvs/pkg/errclass"
 	"github.com/jvs-project/jvs/pkg/model"
 	"github.com/jvs-project/jvs/pkg/pathutil"
 )
@@ -52,7 +50,6 @@ func (m *Manager) Create(name string, baseSnapshotID *model.SnapshotID) (*model.
 	cfg := &model.WorktreeConfig{
 		Name:      name,
 		CreatedAt: time.Now().UTC(),
-		Isolation: model.IsolationExclusive,
 	}
 	if baseSnapshotID != nil {
 		cfg.HeadSnapshotID = *baseSnapshotID
@@ -98,20 +95,10 @@ func (m *Manager) Path(name string) string {
 	return repo.WorktreePayloadPath(m.repoRoot, name)
 }
 
-// Rename renames a worktree. Fails if the worktree is locked.
+// Rename renames a worktree.
 func (m *Manager) Rename(oldName, newName string) error {
 	if err := pathutil.ValidateName(newName); err != nil {
 		return err
-	}
-
-	// Check lock
-	lockMgr := lock.NewManager(m.repoRoot, model.LockPolicy{})
-	state, _, err := lockMgr.Status(oldName)
-	if err != nil {
-		return fmt.Errorf("check lock status: %w", err)
-	}
-	if state == model.LockStateHeld {
-		return errclass.ErrLockConflict.WithMessagef("worktree %s is locked", oldName)
 	}
 
 	// Check if new name exists
@@ -145,20 +132,10 @@ func (m *Manager) Rename(oldName, newName string) error {
 	return repo.WriteWorktreeConfig(m.repoRoot, newName, cfg)
 }
 
-// Remove deletes a worktree. Fails if the worktree is locked or is main.
+// Remove deletes a worktree. Fails if the worktree is main.
 func (m *Manager) Remove(name string) error {
 	if name == "main" {
 		return errors.New("cannot remove main worktree")
-	}
-
-	// Check lock
-	lockMgr := lock.NewManager(m.repoRoot, model.LockPolicy{})
-	state, _, err := lockMgr.Status(name)
-	if err != nil {
-		return fmt.Errorf("check lock status: %w", err)
-	}
-	if state == model.LockStateHeld {
-		return errclass.ErrLockConflict.WithMessagef("worktree %s is locked", name)
 	}
 
 	// Remove payload directory

@@ -1,4 +1,4 @@
-# Snapshot Engine Spec (v6.5)
+# Snapshot Engine Spec (v6.7)
 
 JVS provides one snapshot command with pluggable engines.
 
@@ -37,7 +37,7 @@ Implementation MUST define behavior for:
 If preservation is degraded, command MUST fail or write explicit degraded fields. Silent downgrade is forbidden.
 
 ## Atomic publish and durability protocol (MUST)
-1. Verify preconditions (source, lock/fencing, consistency policy).
+1. Verify preconditions (source exists, consistency policy).
 2. Create intent `.jvs/intents/snapshot-<id>.json`; fsync intent file and parent dir.
 3. Materialize payload into `.jvs/snapshots/<id>.tmp/`.
 4. Compute `payload_root_hash` over the materialized tmp payload.
@@ -97,5 +97,4 @@ The `payload_root_hash` is a deterministic hash over the snapshot payload tree.
   - `rebuild_index` — regenerate `index.sqlite` from snapshot/descriptor state
   - `audit_repair` — recompute audit hash chain over present records (does not recover missing records; missing records indicate tampering and require escalation)
   - `advance_head` — advance head to latest READY snapshot when head is stale
-  - `clean_locks` — remove expired lock files (runtime state rebuild)
   - `clean_intents` — remove completed or abandoned intent files (runtime state rebuild)

@@ -4,10 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/jvs-project/jvs/internal/doctor"
-	"github.com/jvs-project/jvs/internal/lock"
 	"github.com/jvs-project/jvs/internal/repo"
 	"github.com/jvs-project/jvs/internal/snapshot"
 	"github.com/jvs-project/jvs/pkg/model"
@@ -23,13 +21,8 @@ func setupTestRepo(t *testing.T) string {
 }
 
 func createTestSnapshot(t *testing.T, repoPath string) {
-	mgr := lock.NewManager(repoPath, model.LockPolicy{DefaultLeaseTTL: time.Hour})
-	rec, err := mgr.Acquire("main", "test")
-	require.NoError(t, err)
-	defer mgr.Release("main", rec.HolderNonce)
-
 	creator := snapshot.NewCreator(repoPath, model.EngineCopy)
-	_, err = creator.Create("main", "test", model.ConsistencyQuiesced, rec.FencingToken)
+	_, err := creator.Create("main", "test", nil)
 	require.NoError(t, err)
 }
 

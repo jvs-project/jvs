@@ -4,7 +4,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/jvs-project/jvs/internal/lock"
 	"github.com/jvs-project/jvs/internal/repo"
 	"github.com/jvs-project/jvs/internal/worktree"
 	"github.com/jvs-project/jvs/pkg/errclass"
@@ -27,7 +26,6 @@ func TestManager_Create(t *testing.T) {
 	cfg, err := mgr.Create("feature", nil)
 	require.NoError(t, err)
 	assert.Equal(t, "feature", cfg.Name)
-	assert.Equal(t, model.IsolationExclusive, cfg.Isolation)
 
 	// Config file exists
 	assert.FileExists(t, filepath.Join(repoPath, ".jvs", "worktrees", "feature", "config.json"))
@@ -93,18 +91,6 @@ func TestManager_Rename(t *testing.T) {
 	assert.Equal(t, "new-name", cfg.Name)
 }
 
-func TestManager_Rename_WithLock(t *testing.T) {
-	repoPath := setupTestRepo(t)
-	mgr := worktree.NewManager(repoPath)
-	lockMgr := lock.NewManager(repoPath, model.LockPolicy{DefaultLeaseTTL: 100000000000})
-
-	mgr.Create("locked-wt", nil)
-	lockMgr.Acquire("locked-wt", "test")
-
-	err := mgr.Rename("locked-wt", "new-name")
-	require.ErrorIs(t, err, errclass.ErrLockConflict)
-}
-
 func TestManager_Remove(t *testing.T) {
 	repoPath := setupTestRepo(t)
 	mgr := worktree.NewManager(repoPath)
@@ -115,18 +101,6 @@ func TestManager_Remove(t *testing.T) {
 
 	assert.NoDirExists(t, filepath.Join(repoPath, "worktrees", "to-delete"))
 	assert.NoFileExists(t, filepath.Join(repoPath, ".jvs", "worktrees", "to-delete", "config.json"))
-}
-
-func TestManager_Remove_WithLock(t *testing.T) {
-	repoPath := setupTestRepo(t)
-	mgr := worktree.NewManager(repoPath)
-	lockMgr := lock.NewManager(repoPath, model.LockPolicy{DefaultLeaseTTL: 100000000000})
-
-	mgr.Create("locked-wt", nil)
-	lockMgr.Acquire("locked-wt", "test")
-
-	err := mgr.Remove("locked-wt")
-	require.ErrorIs(t, err, errclass.ErrLockConflict)
 }
 
 func TestManager_UpdateHead(t *testing.T) {

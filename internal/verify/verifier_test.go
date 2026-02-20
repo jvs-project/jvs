@@ -1,10 +1,10 @@
 package verify_test
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
-	"time"
 
-	"github.com/jvs-project/jvs/internal/lock"
 	"github.com/jvs-project/jvs/internal/repo"
 	"github.com/jvs-project/jvs/internal/snapshot"
 	"github.com/jvs-project/jvs/internal/verify"
@@ -21,13 +21,11 @@ func setupTestRepo(t *testing.T) string {
 }
 
 func createTestSnapshot(t *testing.T, repoPath string) model.SnapshotID {
-	mgr := lock.NewManager(repoPath, model.LockPolicy{DefaultLeaseTTL: time.Hour})
-	rec, err := mgr.Acquire("main", "test")
-	require.NoError(t, err)
-	defer mgr.Release("main", rec.HolderNonce)
+	mainPath := filepath.Join(repoPath, "main")
+	os.WriteFile(filepath.Join(mainPath, "file.txt"), []byte("content"), 0644)
 
 	creator := snapshot.NewCreator(repoPath, model.EngineCopy)
-	desc, err := creator.Create("main", "test", model.ConsistencyQuiesced, rec.FencingToken)
+	desc, err := creator.Create("main", "test", nil)
 	require.NoError(t, err)
 	return desc.SnapshotID
 }
@@ -48,18 +46,12 @@ func TestVerifier_VerifySnapshot(t *testing.T) {
 func TestVerifier_VerifyAll(t *testing.T) {
 	repoPath := setupTestRepo(t)
 
-	// Create two snapshots with the same lock
-	mgr := lock.NewManager(repoPath, model.LockPolicy{DefaultLeaseTTL: time.Hour})
-	rec, err := mgr.Acquire("main", "test")
-	require.NoError(t, err)
-
+	// Create two snapshots
 	creator := snapshot.NewCreator(repoPath, model.EngineCopy)
-	_, err = creator.Create("main", "first", model.ConsistencyQuiesced, rec.FencingToken)
+	_, err := creator.Create("main", "first", nil)
 	require.NoError(t, err)
-	_, err = creator.Create("main", "second", model.ConsistencyQuiesced, rec.FencingToken)
+	_, err = creator.Create("main", "second", nil)
 	require.NoError(t, err)
-
-	mgr.Release("main", rec.HolderNonce)
 
 	v := verify.NewVerifier(repoPath)
 	results, err := v.VerifyAll(false)
@@ -101,4 +93,107 @@ func TestVerifier_VerifySnapshot_NoPayloadHash(t *testing.T) {
 	assert.True(t, result.ChecksumValid)
 	assert.False(t, result.PayloadHashValid) // Not verified when verifyPayloadHash=false
 	assert.False(t, result.TamperDetected)
+}
+
+func TestVerifier_VerifySnapshot_ChecksumTampering(t *testing.T) {
+	repoPath := setupTestRepo(t)
+	snapshotID := createTestSnapshot(t, repoPath)
+
+	// Corrupt the descriptor by modifying the Note field
+	// This will cause the checksum to mismatch
+	// Descriptors are stored in .jvs/descriptors/<snapshot-id>.json
+	descPath := filepath.Join(repoPath, ".jvs", "descriptors", string(snapshotID)+".json")
+	content, err := os.ReadFile(descPath)
+	require.NoError(t, err)
+
+	t.Logf("Original descriptor: %s", string(content))
+
+	// Modify the note field to invalidate checksum
+	// Replace "test" note with "TAMPERED" - note the space after colon in JSON
+	modified := string(content)
+	modified = replaceJSONField(modified, `"note": "test"`, `"note": "TAMPERED"`)
+	require.NoError(t, os.WriteFile(descPath, []byte(modified), 0644))
+
+	t.Logf("Modified descriptor: %s", modified)
+
+	v := verify.NewVerifier(repoPath)
+	result, err := v.VerifySnapshot(snapshotID, false)
+	require.NoError(t, err)
+
+	t.Logf("Result: %+v", result)
+
+	assert.False(t, result.ChecksumValid)
+	assert.True(t, result.TamperDetected)
+	assert.Equal(t, "critical", result.Severity)
+	assert.Contains(t, result.Error, "checksum mismatch")
+}
+
+// replaceJSONField is a simple helper to replace a field in JSON
+func replaceJSONField(json, old, new string) string {
+	// Simple string replacement - works for our test case
+	result := ""
+	for i := 0; i < len(json); i++ {
+		if i+len(old) <= len(json) && json[i:i+len(old)] == old {
+			result += new
+			i += len(old) - 1
+		} else {
+			result += string(json[i])
+		}
+	}
+	return result
+}
+
+func TestVerifier_VerifySnapshot_PayloadTampering(t *testing.T) {
+	repoPath := setupTestRepo(t)
+	snapshotID := createTestSnapshot(t, repoPath)
+
+	// Modify the snapshot payload
+	snapshotDir := filepath.Join(repoPath, ".jvs", "snapshots", string(snapshotID))
+	// Add a file to the snapshot directory
+	require.NoError(t, os.WriteFile(filepath.Join(snapshotDir, "tampered.txt"), []byte("modified"), 0644))
+
+	v := verify.NewVerifier(repoPath)
+	result, err := v.VerifySnapshot(snapshotID, true) // Verify payload hash
+	require.NoError(t, err)
+	assert.True(t, result.ChecksumValid) // Descriptor checksum still valid
+	assert.False(t, result.PayloadHashValid)
+	assert.True(t, result.TamperDetected)
+	assert.Equal(t, "critical", result.Severity)
+}
+
+func TestVerifier_VerifyAll_WithMixedResults(t *testing.T) {
+	repoPath := setupTestRepo(t)
+
+	// Create two snapshots
+	snapID1 := createTestSnapshot(t, repoPath)
+
+	// Add more content for second snapshot
+	mainPath := filepath.Join(repoPath, "main")
+	os.WriteFile(filepath.Join(mainPath, "file2.txt"), []byte("more content"), 0644)
+	creator := snapshot.NewCreator(repoPath, model.EngineCopy)
+	_, err := creator.Create("main", "second", nil)
+	require.NoError(t, err)
+
+	// Corrupt first snapshot's payload
+	snapshotDir := filepath.Join(repoPath, ".jvs", "snapshots", string(snapID1))
+	require.NoError(t, os.WriteFile(filepath.Join(snapshotDir, "tampered.txt"), []byte("tampered"), 0644))
+
+	v := verify.NewVerifier(repoPath)
+	results, err := v.VerifyAll(true) // Verify payload hashes
+	require.NoError(t, err)
+	assert.Len(t, results, 2)
+
+	// Count valid and invalid
+	validPayloadCount := 0
+	tamperedCount := 0
+	for _, r := range results {
+		if r.PayloadHashValid {
+			validPayloadCount++
+		}
+		if r.TamperDetected {
+			tamperedCount++
+		}
+	}
+	assert.Equal(t, 1, validPayloadCount)
+	assert.Equal(t, 1, tamperedCount)
 }

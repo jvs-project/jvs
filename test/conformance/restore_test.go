@@ -17,9 +17,7 @@ func TestRestore_SafeRestore(t *testing.T) {
 	dataPath := filepath.Join(repoPath, "main", "data.txt")
 	os.WriteFile(dataPath, []byte("original"), 0644)
 
-	runJVSInRepo(t, repoPath, "lock", "acquire")
 	runJVSInRepo(t, repoPath, "snapshot", "v1")
-	runJVSInRepo(t, repoPath, "lock", "release")
 
 	// Get snapshot ID from history
 	stdout, _, _ := runJVSInRepo(t, repoPath, "history", "--json")
@@ -41,6 +39,62 @@ func TestRestore_SafeRestore(t *testing.T) {
 	stdout, _, _ = runJVSInRepo(t, repoPath, "worktree", "list")
 	if !strings.Contains(stdout, "restore-") {
 		t.Error("restore worktree should exist")
+	}
+}
+
+// Test 7: Restore by tag
+func TestRestore_ByTag(t *testing.T) {
+	repoPath, _ := initTestRepo(t)
+
+	// Create content and snapshot with tag
+	dataPath := filepath.Join(repoPath, "main", "data.txt")
+	os.WriteFile(dataPath, []byte("tagged content"), 0644)
+
+	runJVSInRepo(t, repoPath, "snapshot", "release v1", "--tag", "v1.0")
+
+	// Restore by tag using --latest-tag
+	stdout, stderr, code := runJVSInRepo(t, repoPath, "restore", "--latest-tag", "v1.0")
+	if code != 0 {
+		t.Fatalf("restore by tag failed: %s", stderr)
+	}
+	if !strings.Contains(stdout, "Restored snapshot") {
+		t.Errorf("expected restore message, got: %s", stdout)
+	}
+}
+
+// Test 8: Inplace restore requires force
+func TestRestore_InplaceNeedsForce(t *testing.T) {
+	repoPath, _ := initTestRepo(t)
+
+	// Create snapshot
+	runJVSInRepo(t, repoPath, "snapshot", "v1")
+
+	// Get snapshot ID
+	stdout, _, _ := runJVSInRepo(t, repoPath, "history", "--json")
+	snapshotID := extractSnapshotID(stdout)
+
+	// Try inplace restore without force
+	_, _, code := runJVSInRepo(t, repoPath, "restore", snapshotID, "--inplace", "--reason", "test")
+	if code == 0 {
+		t.Error("inplace restore should require --force")
+	}
+}
+
+// Test 9: Inplace restore requires reason
+func TestRestore_InplaceRequiresReason(t *testing.T) {
+	repoPath, _ := initTestRepo(t)
+
+	// Create snapshot
+	runJVSInRepo(t, repoPath, "snapshot", "v1")
+
+	// Get snapshot ID
+	stdout, _, _ := runJVSInRepo(t, repoPath, "history", "--json")
+	snapshotID := extractSnapshotID(stdout)
+
+	// Try inplace restore without reason
+	_, _, code := runJVSInRepo(t, repoPath, "restore", snapshotID, "--inplace", "--force")
+	if code == 0 {
+		t.Error("inplace restore should require --reason")
 	}
 }
 

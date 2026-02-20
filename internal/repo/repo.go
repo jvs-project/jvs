@@ -42,8 +42,6 @@ func Init(path string, name string) (*Repo, error) {
 		filepath.Join(jvsDir, "worktrees", "main"),
 		filepath.Join(jvsDir, "snapshots"),
 		filepath.Join(jvsDir, "descriptors"),
-		filepath.Join(jvsDir, "refs"),
-		filepath.Join(jvsDir, "locks"),
 		filepath.Join(jvsDir, "intents"),
 		filepath.Join(jvsDir, "audit"),
 		filepath.Join(jvsDir, "gc"),
@@ -82,7 +80,6 @@ func Init(path string, name string) (*Repo, error) {
 	cfg := &model.WorktreeConfig{
 		Name:      "main",
 		CreatedAt: time.Now().UTC(),
-		Isolation: model.IsolationExclusive,
 	}
 	if err := WriteWorktreeConfig(path, "main", cfg); err != nil {
 		return nil, fmt.Errorf("write main config: %w", err)

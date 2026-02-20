@@ -6,15 +6,16 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/jvs-project/jvs/internal/lock"
 	"github.com/jvs-project/jvs/internal/restore"
+	"github.com/jvs-project/jvs/internal/snapshot"
 	"github.com/jvs-project/jvs/pkg/model"
 )
 
 var (
-	restoreInplace bool
-	restoreForce   bool
-	restoreReason  string
+	restoreInplace   bool
+	restoreForce     bool
+	restoreReason    string
+	restoreLatestTag string
 )
 
 var restoreCmd = &cobra.Command{
@@ -23,11 +24,46 @@ var restoreCmd = &cobra.Command{
 	Long: `Restore a snapshot.
 
 By default, creates a new worktree from the snapshot (safe restore).
-Use --inplace --force --reason <text> to overwrite the current worktree.`,
-	Args: cobra.ExactArgs(1),
+Use --inplace --force --reason <text> to overwrite the current worktree.
+
+The snapshot-id can be:
+- A full snapshot ID
+- A short ID prefix
+- A tag name (with --latest-tag or as fuzzy match)
+- A note prefix (fuzzy match)`,
+	Args: cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		r, wtName := requireWorktree()
-		snapshotID := model.SnapshotID(args[0])
+		r, _ := requireWorktree()
+
+		var snapshotID model.SnapshotID
+
+		if restoreLatestTag != "" {
+			// Find latest snapshot with tag
+			desc, err := snapshot.FindByTag(r.Root, restoreLatestTag)
+			if err != nil {
+				fmtErr("find snapshot by tag: %v", err)
+				os.Exit(1)
+			}
+			snapshotID = desc.SnapshotID
+		} else if len(args) == 0 {
+			fmtErr("snapshot-id or --latest-tag required")
+			os.Exit(1)
+		} else {
+			// Try to resolve the snapshot ID
+			snapshotID = model.SnapshotID(args[0])
+
+			// Check if it's a valid snapshot ID (exists directly)
+			_, err := snapshot.LoadDescriptor(r.Root, snapshotID)
+			if err != nil {
+				// Try fuzzy match by note/tag/ID prefix
+				desc, fuzzyErr := snapshot.FindOne(r.Root, args[0])
+				if fuzzyErr != nil {
+					fmtErr("snapshot not found: %v (fuzzy search: %v)", err, fuzzyErr)
+					os.Exit(1)
+				}
+				snapshotID = desc.SnapshotID
+			}
+		}
 
 		restorer := restore.NewRestorer(r.Root, model.EngineCopy)
 
@@ -41,26 +77,13 @@ Use --inplace --force --reason <text> to overwrite the current worktree.`,
 				os.Exit(1)
 			}
 
-			// Get fencing token from current lock
-			lockMgr := lock.NewManager(r.Root, model.LockPolicy{})
-			sess, err := lockMgr.LoadSession(wtName)
-			if err != nil {
-				fmtErr("no active lock session (run 'jvs lock acquire' first)")
-				os.Exit(1)
-			}
-			state, rec, err := lockMgr.Status(wtName)
-			if err != nil || state != model.LockStateHeld || rec.HolderNonce != sess.HolderNonce {
-				fmtErr("must hold lock for inplace restore")
-				os.Exit(1)
-			}
-
-			if err := restorer.InplaceRestore(wtName, snapshotID, rec.FencingToken, restoreReason); err != nil {
+			if err := restorer.InplaceRestore(snapshotID, restoreReason); err != nil {
 				fmtErr("inplace restore: %v", err)
 				os.Exit(1)
 			}
 
 			if !jsonOutput {
-				fmt.Printf("Restored snapshot %s to worktree '%s' (inplace)\n", snapshotID, wtName)
+				fmt.Printf("Restored snapshot %s (inplace)\n", snapshotID)
 			}
 		} else {
 			// Safe restore - create new worktree
@@ -83,5 +106,6 @@ func init() {
 	restoreCmd.Flags().BoolVar(&restoreInplace, "inplace", false, "overwrite current worktree (dangerous)")
 	restoreCmd.Flags().BoolVar(&restoreForce, "force", false, "force dangerous operation")
 	restoreCmd.Flags().StringVar(&restoreReason, "reason", "", "reason for inplace restore (required with --inplace)")
+	restoreCmd.Flags().StringVar(&restoreLatestTag, "latest-tag", "", "restore latest snapshot with this tag")
 	rootCmd.AddCommand(restoreCmd)
 }

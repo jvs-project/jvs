@@ -88,10 +88,9 @@ func formatMetadata(info os.FileInfo) string {
 	case info.Mode()&os.ModeSymlink != 0:
 		return fmt.Sprintf("mode=%04o", info.Mode().Perm())
 	default:
-		return fmt.Sprintf("mode=%04o,size=%d,mod=%d",
+		return fmt.Sprintf("mode=%04o,size=%d",
 			info.Mode().Perm(),
-			info.Size(),
-			info.ModTime().UnixNano())
+			info.Size())
 	}
 }
 

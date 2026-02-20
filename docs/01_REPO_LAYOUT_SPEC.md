@@ -1,4 +1,4 @@
-# Repository Layout Spec (v6.5)
+# Repository Layout Spec (v6.7)
 
 ## Definitions
 - Volume: mounted filesystem (JuiceFS preferred)
@@ -17,8 +17,6 @@ repo/
 │   │       └── config.json
 │   ├── snapshots/
 │   ├── descriptors/
-│   ├── refs/
-│   ├── locks/          # runtime state; not migrated as-is
 │   ├── intents/        # in-flight operations; not migrated as-is
 │   ├── audit/          # append-only audit events
 │   ├── gc/             # retention policy, pin sets, gc plans/results
@@ -42,29 +40,15 @@ Contents: single line with integer format version.
 - If `format_version` < current version and migration is available, `jvs doctor --strict` SHOULD report upgrade recommendation.
 - Format version increments only on incompatible on-disk layout changes.
 
-## `refs/` — named snapshot references (MUST)
-Path: `.jvs/refs/<name>.json`
-
-Refs provide stable, human-readable names for snapshots (e.g., tags, release markers).
-
-### Schema (MUST)
-- `ref_name`: matches `[a-zA-Z0-9._-]+`
-- `snapshot_id`: target snapshot ID
-- `created_at`: ISO 8601 timestamp
-- `created_by`: actor identity
-- `note`: optional description
+## Snapshot tags (MUST)
+Tags are embedded directly in snapshot descriptors as a `tags` array field.
 
 ### Rules (MUST)
-- Ref names follow the same safety rules as worktree names (no separators, `..`, control chars; NFC normalized).
-- Refs are immutable once created. To retarget, delete and recreate.
-- Deletion appends audit event.
-- `jvs verify --all` MUST validate that ref targets exist and are READY.
-- Refs are portable history state and MUST be included in migration sync.
-
-### CLI
-- `jvs ref create <name> <snapshot-id>` — create named reference.
-- `jvs ref list [--json]` — list all refs.
-- `jvs ref delete <name>` — remove ref with audit.
+- Tag strings follow the same safety rules as worktree names: `[a-zA-Z0-9._-]+`
+- Tags are optional and may be empty.
+- Tags are part of the descriptor and thus immutable once the snapshot is created.
+- Use `jvs history --tag <tag>` to filter by tag.
+- Use `jvs restore --latest-tag <tag>` to restore the most recent snapshot with a tag.
 
 ## Invariants (MUST)
 - `.jvs/` MUST NOT exist under any payload root.
@@ -75,9 +59,9 @@ Refs provide stable, human-readable names for snapshots (e.g., tags, release mar
 - Every worktree payload directory MUST have a corresponding entry in `.jvs/worktrees/<name>/config.json`.
 
 ## Portability classes
-- Portable history state: `format_version`, `worktrees/`, `snapshots/`, `descriptors/`, `refs/`, `audit/`, `gc/`.
+- Portable history state: `format_version`, `worktrees/`, `snapshots/`, `descriptors/`, `audit/`, `gc/`.
 - Rebuildable cache state: `index.sqlite`.
-- Runtime state (non-portable): `locks/`, active `intents/`.
+- Runtime state (non-portable): active `intents/`.
 
 ## Why `repo/main/` exists
 JuiceFS clone performs 1:1 directory clone without excludes.

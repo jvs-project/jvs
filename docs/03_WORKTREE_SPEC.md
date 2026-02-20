@@ -1,6 +1,4 @@
-# Worktree Spec (v6.5)
-
-All worktrees use `exclusive` isolation. `shared` mode is deferred to v1.x.
+# Worktree Spec (v6.7)
 
 ## Worktree identity
 Worktree metadata is stored centrally under the control plane:
@@ -14,17 +12,11 @@ No separate `id`, `base_snapshot`, or `head_snapshot` files exist.
 
 Worktree payload directories (`repo/main/`, `repo/worktrees/<name>/`) contain **pure user data only** — no control-plane artifacts. This ensures `juicefs clone` captures a clean payload without exclusion logic (see `01_REPO_LAYOUT_SPEC.md` §Worktree discovery).
 
-## Isolation modes
-### `exclusive` (default)
-- single writer enforced by lock/lease/fencing
-- required for deterministic `quiesced` snapshot operation
-
 ## `config.json` schema (MUST)
 Path: `repo/.jvs/worktrees/<name>/config.json`
 
 Required fields:
-- `worktree_id`: unique worktree identifier (matches directory name)
-- `isolation`: `"exclusive"` (only valid value in v0.x)
+- `name`: worktree name (matches directory name)
 - `created_at`: ISO 8601 timestamp
 - `base_snapshot_id`: snapshot ID used to create this worktree (nullable for `main`)
 - `head_snapshot_id`: current head snapshot (nullable before first snapshot)
@@ -36,13 +28,8 @@ Optional fields:
 - Name charset: `[a-zA-Z0-9._-]+`
 - Name MUST NOT contain separators, `..`, control chars, or empty segments
 - Name MUST normalize to NFC before validation
-- Canonical resolved path MUST remain under `repo/worktrees/`
+- Canonical resolved path MUST remain under `repo/worktrees/` or be `repo/main/`
 - Operations MUST fail on symlink escape detection
-
-## Rename and lock interaction (MUST)
-- `jvs worktree rename` MUST fail with `E_LOCK_CONFLICT` if the source worktree has an active (non-expired) lock.
-- Rationale: renaming changes the worktree identity; an active lock holder references the old identity, making the lock semantically invalid.
-- Operator must release or wait for lock expiry before renaming.
 
 ## Lifecycle
 create -> active -> snapshot -> restore(optional) -> remove
@@ -54,4 +41,4 @@ create -> active -> snapshot -> restore(optional) -> remove
 3. Append audit event recording the removal.
 
 Removing a worktree does not remove its snapshots. Retention is controlled by GC policy.
-After removal, the worktree's `head_snapshot_id` no longer exists; its snapshots lose "current head" GC protection and become deletion candidates unless pinned or referenced by a ref.
+After removal, the worktree's `head_snapshot_id` no longer exists; its snapshots lose "current head" GC protection and become deletion candidates unless pinned.

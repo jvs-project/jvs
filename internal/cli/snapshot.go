@@ -6,13 +6,13 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/jvs-project/jvs/internal/lock"
 	"github.com/jvs-project/jvs/internal/snapshot"
 	"github.com/jvs-project/jvs/pkg/model"
+	"github.com/jvs-project/jvs/pkg/pathutil"
 )
 
 var (
-	snapshotConsistency string
+	snapshotTags []string
 )
 
 var snapshotCmd = &cobra.Command{
@@ -20,8 +20,8 @@ var snapshotCmd = &cobra.Command{
 	Short: "Create a snapshot of the current worktree",
 	Long: `Create a snapshot of the current worktree.
 
-The worktree must be locked before creating a snapshot.
-Use --consistency to specify the consistency level (quiesced or best_effort).`,
+Captures the current state of the worktree at a point in time.
+Use --tag to attach one or more tags to the snapshot.`,
 	Args: cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		r, wtName := requireWorktree()
@@ -31,32 +31,16 @@ Use --consistency to specify the consistency level (quiesced or best_effort).`,
 			note = args[0]
 		}
 
-		consistency := model.ConsistencyQuiesced
-		if snapshotConsistency == "best_effort" {
-			consistency = model.ConsistencyBestEffort
-		}
-
-		// Check lock and get fencing token
-		lockMgr := lock.NewManager(r.Root, model.LockPolicy{})
-		state, rec, err := lockMgr.Status(wtName)
-		if err != nil {
-			fmtErr("check lock status: %v", err)
-			os.Exit(1)
-		}
-		if state != model.LockStateHeld {
-			fmtErr("worktree %s is not locked (run 'jvs lock acquire' first)", wtName)
-			os.Exit(1)
-		}
-
-		// Load session to get nonce
-		sess, err := lockMgr.LoadSession(wtName)
-		if err != nil || sess.HolderNonce != rec.HolderNonce {
-			fmtErr("lock session mismatch (run 'jvs lock acquire' from this terminal)")
-			os.Exit(1)
+		// Validate tags
+		for _, tag := range snapshotTags {
+			if err := pathutil.ValidateTag(tag); err != nil {
+				fmtErr("invalid tag %q: %v", tag, err)
+				os.Exit(1)
+			}
 		}
 
 		creator := snapshot.NewCreator(r.Root, model.EngineCopy)
-		desc, err := creator.Create(wtName, note, consistency, rec.FencingToken)
+		desc, err := creator.Create(wtName, note, snapshotTags)
 		if err != nil {
 			fmtErr("create snapshot: %v", err)
 			os.Exit(1)
@@ -71,6 +55,6 @@ Use --consistency to specify the consistency level (quiesced or best_effort).`,
 }
 
 func init() {
-	snapshotCmd.Flags().StringVar(&snapshotConsistency, "consistency", "quiesced", "consistency level (quiesced|best_effort)")
+	snapshotCmd.Flags().StringSliceVar(&snapshotTags, "tag", []string{}, "tag for this snapshot (can be repeated)")
 	rootCmd.AddCommand(snapshotCmd)
 }

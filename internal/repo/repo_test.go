@@ -25,8 +25,6 @@ func TestInit_CreatesDirectoryStructure(t *testing.T) {
 	assert.FileExists(t, filepath.Join(repoPath, ".jvs", "worktrees", "main", "config.json"))
 	assert.DirExists(t, filepath.Join(repoPath, ".jvs", "snapshots"))
 	assert.DirExists(t, filepath.Join(repoPath, ".jvs", "descriptors"))
-	assert.DirExists(t, filepath.Join(repoPath, ".jvs", "refs"))
-	assert.DirExists(t, filepath.Join(repoPath, ".jvs", "locks"))
 	assert.DirExists(t, filepath.Join(repoPath, ".jvs", "intents"))
 	assert.DirExists(t, filepath.Join(repoPath, ".jvs", "audit"))
 	assert.DirExists(t, filepath.Join(repoPath, ".jvs", "gc"))
@@ -38,6 +36,17 @@ func TestInit_CreatesDirectoryStructure(t *testing.T) {
 	content, err := os.ReadFile(filepath.Join(repoPath, ".jvs", "format_version"))
 	require.NoError(t, err)
 	assert.Equal(t, "1\n", string(content))
+
+	// Verify repo_id exists and is non-empty
+	assert.FileExists(t, filepath.Join(repoPath, ".jvs", "repo_id"))
+	repoIDContent, err := os.ReadFile(filepath.Join(repoPath, ".jvs", "repo_id"))
+	require.NoError(t, err)
+	assert.NotEmpty(t, string(repoIDContent))
+
+	// Verify returned repo struct
+	assert.Equal(t, repoPath, r.Root)
+	assert.Equal(t, 1, r.FormatVersion)
+	assert.NotEmpty(t, r.RepoID)
 }
 
 func TestInit_MainWorktreeConfig(t *testing.T) {
@@ -50,8 +59,32 @@ func TestInit_MainWorktreeConfig(t *testing.T) {
 	cfg, err := repo.LoadWorktreeConfig(repoPath, "main")
 	require.NoError(t, err)
 	assert.Equal(t, "main", cfg.Name)
-	assert.Equal(t, model.IsolationExclusive, cfg.Isolation)
 	assert.NotZero(t, cfg.CreatedAt)
+}
+
+func TestInit_InvalidName(t *testing.T) {
+	dir := t.TempDir()
+
+	_, err := repo.Init(dir, "../evil")
+	assert.Error(t, err)
+
+	_, err = repo.Init(dir, "name/with/slash")
+	assert.Error(t, err)
+
+	_, err = repo.Init(dir, "")
+	assert.Error(t, err)
+}
+
+func TestInit_ExistingDirectory(t *testing.T) {
+	dir := t.TempDir()
+	repoPath := filepath.Join(dir, "existing")
+
+	// Create directory first
+	require.NoError(t, os.MkdirAll(repoPath, 0755))
+
+	// Init should still work
+	_, err := repo.Init(repoPath, "existing")
+	require.NoError(t, err)
 }
 
 func TestDiscover_FindsRepo(t *testing.T) {
@@ -99,6 +132,27 @@ func TestDiscoverWorktree_MainWorktree(t *testing.T) {
 	assert.Equal(t, "main", wtName)
 }
 
+func TestDiscoverWorktree_NamedWorktree(t *testing.T) {
+	dir := t.TempDir()
+	repoPath := filepath.Join(dir, "myrepo")
+	_, err := repo.Init(repoPath, "myrepo")
+	require.NoError(t, err)
+
+	// Create a named worktree
+	wtPath := filepath.Join(repoPath, "worktrees", "feature")
+	require.NoError(t, os.MkdirAll(wtPath, 0755))
+
+	// Create config for worktree
+	cfgDir := filepath.Join(repoPath, ".jvs", "worktrees", "feature")
+	require.NoError(t, os.MkdirAll(cfgDir, 0755))
+
+	// Discover from named worktree
+	r, wtName, err := repo.DiscoverWorktree(wtPath)
+	require.NoError(t, err)
+	assert.Equal(t, repoPath, r.Root)
+	assert.Equal(t, "feature", wtName)
+}
+
 func TestDiscoverWorktree_FromJvsDir(t *testing.T) {
 	dir := t.TempDir()
 	repoPath := filepath.Join(dir, "myrepo")
@@ -111,4 +165,81 @@ func TestDiscoverWorktree_FromJvsDir(t *testing.T) {
 	assert.Equal(t, repoPath, r.Root)
 	// .jvs is not a worktree, should return empty or error
 	assert.Equal(t, "", wtName)
+}
+
+func TestWorktreeConfigPath(t *testing.T) {
+	path := repo.WorktreeConfigPath("/repo", "main")
+	assert.Equal(t, "/repo/.jvs/worktrees/main/config.json", path)
+
+	path = repo.WorktreeConfigPath("/repo", "feature")
+	assert.Equal(t, "/repo/.jvs/worktrees/feature/config.json", path)
+}
+
+func TestWorktreePayloadPath(t *testing.T) {
+	path := repo.WorktreePayloadPath("/repo", "main")
+	assert.Equal(t, "/repo/main", path)
+
+	path = repo.WorktreePayloadPath("/repo", "feature")
+	assert.Equal(t, "/repo/worktrees/feature", path)
+}
+
+func TestWriteAndLoadWorktreeConfig(t *testing.T) {
+	dir := t.TempDir()
+	repoPath := filepath.Join(dir, "testrepo")
+	_, err := repo.Init(repoPath, "testrepo")
+	require.NoError(t, err)
+
+	// Load existing config
+	cfg, err := repo.LoadWorktreeConfig(repoPath, "main")
+	require.NoError(t, err)
+	assert.Equal(t, "main", cfg.Name)
+
+	// Modify and write
+	cfg.HeadSnapshotID = "1708300800000-abc12345"
+	err = repo.WriteWorktreeConfig(repoPath, "main", cfg)
+	require.NoError(t, err)
+
+	// Load again
+	cfg2, err := repo.LoadWorktreeConfig(repoPath, "main")
+	require.NoError(t, err)
+	assert.Equal(t, model.SnapshotID("1708300800000-abc12345"), cfg2.HeadSnapshotID)
+}
+
+func TestLoadWorktreeConfig_NotFound(t *testing.T) {
+	dir := t.TempDir()
+	repoPath := filepath.Join(dir, "testrepo")
+	_, err := repo.Init(repoPath, "testrepo")
+	require.NoError(t, err)
+
+	_, err = repo.LoadWorktreeConfig(repoPath, "nonexistent")
+	assert.Error(t, err)
+}
+
+func TestDiscover_WrongFormatVersion(t *testing.T) {
+	dir := t.TempDir()
+	repoPath := filepath.Join(dir, "myrepo")
+	_, err := repo.Init(repoPath, "myrepo")
+	require.NoError(t, err)
+
+	// Overwrite format_version with higher version
+	formatFile := filepath.Join(repoPath, ".jvs", "format_version")
+	err = os.WriteFile(formatFile, []byte("999\n"), 0644)
+	require.NoError(t, err)
+
+	_, err = repo.Discover(repoPath)
+	assert.Error(t, err)
+}
+
+func TestDiscover_MissingFormatVersion(t *testing.T) {
+	dir := t.TempDir()
+	repoPath := filepath.Join(dir, "myrepo")
+	_, err := repo.Init(repoPath, "myrepo")
+	require.NoError(t, err)
+
+	// Remove format_version
+	formatFile := filepath.Join(repoPath, ".jvs", "format_version")
+	os.Remove(formatFile)
+
+	_, err = repo.Discover(repoPath)
+	assert.Error(t, err)
 }

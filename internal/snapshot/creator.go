@@ -10,7 +10,6 @@ import (
 	"github.com/jvs-project/jvs/internal/audit"
 	"github.com/jvs-project/jvs/internal/engine"
 	"github.com/jvs-project/jvs/internal/integrity"
-	"github.com/jvs-project/jvs/internal/lock"
 	"github.com/jvs-project/jvs/internal/worktree"
 	"github.com/jvs-project/jvs/pkg/errclass"
 	"github.com/jvs-project/jvs/pkg/fsutil"
@@ -47,7 +46,7 @@ func NewCreator(repoRoot string, engineType model.EngineType) *Creator {
 }
 
 // Create performs a full snapshot of the worktree using the 12-step protocol.
-func (c *Creator) Create(worktreeName, note string, consistency model.ConsistencyLevel, fencingToken int64) (*model.Descriptor, error) {
+func (c *Creator) Create(worktreeName, note string, tags []string) (*model.Descriptor, error) {
 	// Step 1: Validate worktree exists
 	wtMgr := worktree.NewManager(c.repoRoot)
 	cfg, err := wtMgr.Get(worktreeName)
@@ -55,16 +54,10 @@ func (c *Creator) Create(worktreeName, note string, consistency model.Consistenc
 		return nil, fmt.Errorf("get worktree: %w", err)
 	}
 
-	// Step 2: Validate fencing token
-	lockMgr := lock.NewManager(c.repoRoot, model.LockPolicy{})
-	if err := lockMgr.ValidateFencing(worktreeName, fencingToken); err != nil {
-		return nil, err
-	}
-
-	// Step 3: Generate snapshot ID
+	// Step 2: Generate snapshot ID
 	snapshotID := model.NewSnapshotID()
 
-	// Step 4: Create intent record (for crash recovery)
+	// Step 3: Create intent record (for crash recovery)
 	intentPath := filepath.Join(c.repoRoot, ".jvs", "intents", string(snapshotID)+".json")
 	intent := &model.IntentRecord{
 		SnapshotID:   snapshotID,
@@ -77,27 +70,27 @@ func (c *Creator) Create(worktreeName, note string, consistency model.Consistenc
 	}
 	defer os.Remove(intentPath) // cleanup on success
 
-	// Step 5: Create snapshot directory
+	// Step 4: Create snapshot directory
 	snapshotDir := filepath.Join(c.repoRoot, ".jvs", "snapshots", string(snapshotID))
 	if err := os.MkdirAll(snapshotDir, 0755); err != nil {
 		return nil, fmt.Errorf("create snapshot dir: %w", err)
 	}
 
-	// Step 6: Clone payload to snapshot directory
+	// Step 5: Clone payload to snapshot directory
 	payloadPath := wtMgr.Path(worktreeName)
 	if _, err := c.engine.Clone(payloadPath, snapshotDir); err != nil {
 		os.RemoveAll(snapshotDir)
 		return nil, fmt.Errorf("clone payload: %w", err)
 	}
 
-	// Step 7: Compute payload root hash
+	// Step 6: Compute payload root hash
 	payloadHash, err := integrity.ComputePayloadRootHash(snapshotDir)
 	if err != nil {
 		os.RemoveAll(snapshotDir)
 		return nil, fmt.Errorf("compute payload hash: %w", err)
 	}
 
-	// Step 8: Create descriptor
+	// Step 7: Create descriptor
 	var parentID *model.SnapshotID
 	if cfg.HeadSnapshotID != "" {
 		pid := cfg.HeadSnapshotID
@@ -105,19 +98,18 @@ func (c *Creator) Create(worktreeName, note string, consistency model.Consistenc
 	}
 
 	desc := &model.Descriptor{
-		SnapshotID:        snapshotID,
-		ParentID:          parentID,
-		WorktreeName:      worktreeName,
-		CreatedAt:         time.Now().UTC(),
-		Note:              note,
-		Engine:            c.engineType,
-		ConsistencyLevel:  consistency,
-		PayloadRootHash:   payloadHash,
-		FencingToken:      fencingToken,
-		IntegrityState:    model.IntegrityVerified,
+		SnapshotID:      snapshotID,
+		ParentID:        parentID,
+		WorktreeName:    worktreeName,
+		CreatedAt:       time.Now().UTC(),
+		Note:            note,
+		Tags:            tags,
+		Engine:          c.engineType,
+		PayloadRootHash: payloadHash,
+		IntegrityState:  model.IntegrityVerified,
 	}
 
-	// Step 9: Compute descriptor checksum
+	// Step 8: Compute descriptor checksum
 	checksum, err := integrity.ComputeDescriptorChecksum(desc)
 	if err != nil {
 		os.RemoveAll(snapshotDir)
@@ -125,7 +117,7 @@ func (c *Creator) Create(worktreeName, note string, consistency model.Consistenc
 	}
 	desc.DescriptorChecksum = checksum
 
-	// Step 10: Write .READY marker
+	// Step 9: Write .READY marker
 	readyMarker := &model.ReadyMarker{
 		SnapshotID:  snapshotID,
 		CompletedAt: time.Now().UTC(),
@@ -137,26 +129,20 @@ func (c *Creator) Create(worktreeName, note string, consistency model.Consistenc
 		return nil, fmt.Errorf("write ready marker: %w", err)
 	}
 
-	// Step 10.5: Re-validate fencing before critical mutation
-	if err := lockMgr.ValidateFencing(worktreeName, fencingToken); err != nil {
-		os.RemoveAll(snapshotDir)
-		return nil, err
-	}
-
-	// Step 11: Write descriptor atomically
+	// Step 10: Write descriptor atomically
 	descriptorPath := filepath.Join(c.repoRoot, ".jvs", "descriptors", string(snapshotID)+".json")
 	if err := c.writeDescriptor(descriptorPath, desc); err != nil {
 		os.RemoveAll(snapshotDir)
 		return nil, fmt.Errorf("write descriptor: %w", err)
 	}
 
-	// Step 12: Update worktree head
+	// Step 11: Update worktree head
 	if err := wtMgr.UpdateHead(worktreeName, snapshotID); err != nil {
 		// Don't remove snapshot, it's valid
 		return nil, fmt.Errorf("update head: %w", err)
 	}
 
-	// Step 13: Write audit log
+	// Step 12: Write audit log
 	if err := c.auditLogger.Append(model.EventTypeSnapshotCreate, worktreeName, snapshotID, map[string]any{
 		"engine":   string(c.engineType),
 		"note":     note,

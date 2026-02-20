@@ -3,37 +3,15 @@
 package conformance
 
 import (
-	"path/filepath"
 	"strings"
 	"testing"
 )
 
-// Test 26: Inplace restore requires lock
-func TestRestore_InplaceRequiresLock(t *testing.T) {
-	repoPath, _ := initTestRepo(t)
-
-	// Create snapshot
-	runJVSInRepo(t, repoPath, "lock", "acquire")
-	runJVSInRepo(t, repoPath, "snapshot", "v1")
-	runJVSInRepo(t, repoPath, "lock", "release")
-
-	// Get snapshot ID
-	stdout, _, _ := runJVSInRepo(t, repoPath, "history", "--json")
-	snapshotID := extractSnapshotID(stdout)
-
-	// Try inplace restore without lock
-	_, _, code := runJVSInRepo(t, repoPath, "restore", snapshotID, "--inplace", "--force", "--reason", "test")
-	if code == 0 {
-		t.Error("inplace restore should require lock")
-	}
-}
-
-// Test 27: Inplace restore requires force flag
+// Test 26: Inplace restore requires force flag
 func TestRestore_InplaceRequiresForce(t *testing.T) {
 	repoPath, _ := initTestRepo(t)
 
-	// Create snapshot with lock
-	runJVSInRepo(t, repoPath, "lock", "acquire")
+	// Create snapshot
 	runJVSInRepo(t, repoPath, "snapshot", "v1")
 
 	// Get snapshot ID
@@ -45,20 +23,16 @@ func TestRestore_InplaceRequiresForce(t *testing.T) {
 	if code == 0 {
 		t.Error("inplace restore should require --force")
 	}
-
-	runJVSInRepo(t, repoPath, "lock", "release")
 }
 
-// Test 28: History limit works
+// Test 27: History limit works
 func TestHistory_Limit(t *testing.T) {
 	repoPath, _ := initTestRepo(t)
 
 	// Create 5 snapshots
-	runJVSInRepo(t, repoPath, "lock", "acquire")
 	for i := 0; i < 5; i++ {
 		runJVSInRepo(t, repoPath, "snapshot", "test")
 	}
-	runJVSInRepo(t, repoPath, "lock", "release")
 
 	// History with limit 2
 	stdout, _, code := runJVSInRepo(t, repoPath, "history", "--limit", "2")
@@ -72,7 +46,7 @@ func TestHistory_Limit(t *testing.T) {
 	}
 }
 
-// Test 29: Invalid name rejected
+// Test 28: Invalid name rejected
 func TestValidation_InvalidName(t *testing.T) {
 	repoPath, _ := initTestRepo(t)
 
@@ -83,14 +57,12 @@ func TestValidation_InvalidName(t *testing.T) {
 	}
 }
 
-// Test 30: Verify with payload hash
+// Test 29: Verify with payload hash
 func TestVerify_WithPayloadHash(t *testing.T) {
 	repoPath, _ := initTestRepo(t)
 
 	// Create snapshot
-	runJVSInRepo(t, repoPath, "lock", "acquire")
 	runJVSInRepo(t, repoPath, "snapshot", "v1")
-	runJVSInRepo(t, repoPath, "lock", "release")
 
 	// Get snapshot ID
 	stdout, _, _ := runJVSInRepo(t, repoPath, "history", "--json")
@@ -103,16 +75,14 @@ func TestVerify_WithPayloadHash(t *testing.T) {
 	}
 }
 
-// Test 31: Multiple snapshots maintain lineage
+// Test 30: Multiple snapshots maintain lineage
 func TestSnapshot_Lineage(t *testing.T) {
 	repoPath, _ := initTestRepo(t)
 
 	// Create multiple snapshots
-	runJVSInRepo(t, repoPath, "lock", "acquire")
 	runJVSInRepo(t, repoPath, "snapshot", "first")
 	runJVSInRepo(t, repoPath, "snapshot", "second")
 	runJVSInRepo(t, repoPath, "snapshot", "third")
-	runJVSInRepo(t, repoPath, "lock", "release")
 
 	// Verify all snapshots exist
 	stdout, _, _ := runJVSInRepo(t, repoPath, "verify", "--all")
@@ -121,33 +91,13 @@ func TestSnapshot_Lineage(t *testing.T) {
 	}
 }
 
-// Test 32: Worktree rename with active lock fails
-func TestWorktree_RenameWithLockFails(t *testing.T) {
-	repoPath, _ := initTestRepo(t)
-
-	// Create worktree and acquire lock
-	runJVSInRepo(t, repoPath, "worktree", "create", "feature")
-
-	// Go to feature worktree and acquire lock
-	featurePath := filepath.Join(repoPath, "worktrees", "feature")
-	runJVS(t, featurePath, "lock", "acquire")
-
-	// Try to rename from repo root
-	_, _, code := runJVSInRepo(t, repoPath, "worktree", "rename", "feature", "new-feature")
-	if code == 0 {
-		t.Error("should not rename locked worktree")
-	}
-}
-
-// Test 33: GC run with valid plan
+// Test 31: GC run with valid plan
 func TestGC_RunWithPlan(t *testing.T) {
 	repoPath, _ := initTestRepo(t)
 
 	// Create snapshots
-	runJVSInRepo(t, repoPath, "lock", "acquire")
 	runJVSInRepo(t, repoPath, "snapshot", "v1")
 	runJVSInRepo(t, repoPath, "snapshot", "v2")
-	runJVSInRepo(t, repoPath, "lock", "release")
 
 	// Create plan
 	stdout, _, _ := runJVSInRepo(t, repoPath, "gc", "plan", "--json")
@@ -160,6 +110,44 @@ func TestGC_RunWithPlan(t *testing.T) {
 	_, _, code := runJVSInRepo(t, repoPath, "gc", "run", "--plan-id", planID)
 	if code != 0 {
 		t.Error("gc run should succeed")
+	}
+}
+
+// Test 32: Snapshot with tags (integration)
+func TestSnapshot_TagsIntegration(t *testing.T) {
+	repoPath, _ := initTestRepo(t)
+
+	// Create snapshot with tags
+	runJVSInRepo(t, repoPath, "snapshot", "release v1", "--tag", "v1.0", "--tag", "release")
+
+	// Verify tag appears in history
+	stdout, _, code := runJVSInRepo(t, repoPath, "history", "--tag", "release")
+	if code != 0 {
+		t.Fatal("history --tag failed")
+	}
+	if !strings.Contains(stdout, "release") {
+		t.Error("expected tag in history output")
+	}
+}
+
+// Test 33: History grep filter
+func TestHistory_GrepFilter(t *testing.T) {
+	repoPath, _ := initTestRepo(t)
+
+	// Create snapshots with different notes
+	runJVSInRepo(t, repoPath, "snapshot", "development work")
+	runJVSInRepo(t, repoPath, "snapshot", "production release")
+
+	// Filter by grep
+	stdout, _, code := runJVSInRepo(t, repoPath, "history", "--grep", "release")
+	if code != 0 {
+		t.Fatal("history --grep failed")
+	}
+	if !strings.Contains(stdout, "release") {
+		t.Error("expected 'release' in output")
+	}
+	if strings.Contains(stdout, "development") {
+		t.Error("should not contain 'development'")
 	}
 }
 

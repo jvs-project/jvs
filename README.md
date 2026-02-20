@@ -13,13 +13,13 @@ JVS versions full workspaces as snapshots and provides navigable, verifiable, ta
 - No `remote`/`push`/`pull` in JVS
 - No backend credential/storage config in JVS
 - No diff/staging/merge object model in v0.x
+- No distributed locking (local-first)
 - Project Constitution: See /docs/CONSTITUTION.md before proposing new features.
 
-## Core guarantees (v6.5)
+## Core guarantees (v6.7)
 - Safe default restore: `jvs restore <id>` creates a new worktree
-- Strong exclusive writer safety: lock + lease + fencing
 - Two-layer integrity: descriptor checksum + payload hash (SHA-256)
-- Exclusive mode only in v0.x (shared mode deferred to v1.x)
+- Simple workflow: snapshot and restore without lock management
 
 ## Installation
 
@@ -42,10 +42,8 @@ juicefs mount redis://127.0.0.1:6379/1 /mnt/jfs -d
 cd /mnt/jfs  # or any directory
 jvs init myrepo
 cd myrepo/main
-jvs lock acquire
-jvs snapshot "init"
+jvs snapshot "init" --tag v1.0
 jvs history
-jvs lock release
 ```
 
 ## Commands
@@ -53,15 +51,12 @@ jvs lock release
 | Command | Description |
 |---------|-------------|
 | `jvs init <name>` | Initialize a new repository |
-| `jvs snapshot [note]` | Create a snapshot (requires lock) |
-| `jvs history` | Show snapshot history |
+| `jvs snapshot [note] [--tag <tag>]` | Create a snapshot |
+| `jvs history [--tag <tag>] [--grep <pattern>]` | Show snapshot history |
 | `jvs restore <id>` | Restore to new worktree (safe) |
+| `jvs restore --latest-tag <tag>` | Restore latest snapshot with tag |
 | `jvs restore <id> --inplace --force --reason <text>` | Overwrite current worktree |
-| `jvs lock acquire` | Acquire exclusive lock |
-| `jvs lock release` | Release lock |
-| `jvs lock status` | Show lock status |
 | `jvs worktree create/list/remove` | Manage worktrees |
-| `jvs ref create/list/delete` | Manage named references |
 | `jvs verify --all` | Verify all snapshots |
 | `jvs doctor` | Check repository health |
 | `jvs gc plan/run` | Garbage collection |
@@ -76,7 +71,6 @@ myrepo/
 │   ├── worktrees/        # Worktree metadata
 │   ├── snapshots/        # Snapshot payload directories
 │   ├── descriptors/      # Snapshot descriptors (JSON)
-│   ├── refs/             # Named references
 │   ├── audit/            # Audit log (JSONL)
 │   └── gc/               # GC plans and tombstones
 ├── main/                 # Main worktree (payload)
@@ -113,7 +107,7 @@ jvs verify --all
 ```
 
 ## Migration / backup
-Use `juicefs sync` and exclude runtime state (`.jvs/locks`, active `.jvs/intents`).
+Use `juicefs sync` and exclude runtime state (active `.jvs/intents`).
 See `docs/18_MIGRATION_AND_BACKUP.md`.
 
-**Spec version:** v6.5 (2026-02-20)
+**Spec version:** v6.7 (2026-02-20)

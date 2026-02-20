@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/jvs-project/jvs/internal/audit"
-	"github.com/jvs-project/jvs/internal/ref"
 	"github.com/jvs-project/jvs/internal/snapshot"
 	"github.com/jvs-project/jvs/internal/worktree"
 	"github.com/jvs-project/jvs/pkg/fsutil"
@@ -152,21 +151,12 @@ func (c *Collector) computeProtectedSet() ([]model.SnapshotID, error) {
 		}
 	}
 
-	// 2. All refs
-	refMgr := ref.NewManager(c.repoRoot)
-	refs, err := refMgr.List()
-	if err == nil {
-		for _, r := range refs {
-			protected[r.TargetID] = true
-		}
-	}
-
-	// 3. Lineage traversal (keep parent chains)
+	// 2. Lineage traversal (keep parent chains)
 	for id := range protected {
 		c.walkLineage(id, protected)
 	}
 
-	// 4. All intents (in-progress operations)
+	// 3. All intents (in-progress operations)
 	intentsDir := filepath.Join(c.repoRoot, ".jvs", "intents")
 	entries, _ := os.ReadDir(intentsDir)
 	for _, entry := range entries {

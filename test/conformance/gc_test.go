@@ -12,10 +12,8 @@ func TestGC_Plan(t *testing.T) {
 	repoPath, _ := initTestRepo(t)
 
 	// Create some snapshots
-	runJVSInRepo(t, repoPath, "lock", "acquire")
 	runJVSInRepo(t, repoPath, "snapshot", "v1")
 	runJVSInRepo(t, repoPath, "snapshot", "v2")
-	runJVSInRepo(t, repoPath, "lock", "release")
 
 	// Create GC plan
 	stdout, stderr, code := runJVSInRepo(t, repoPath, "gc", "plan")
@@ -64,27 +62,12 @@ func TestJSON_Output(t *testing.T) {
 	}
 }
 
-// Test 24: Lock status shows lock state
-func TestLock_Status(t *testing.T) {
-	repoPath, _ := initTestRepo(t)
-
-	stdout, _, code := runJVSInRepo(t, repoPath, "lock", "status")
-	if code != 0 {
-		t.Fatal("lock status failed")
-	}
-	if !strings.Contains(stdout, "Lock state") {
-		t.Errorf("expected lock state, got: %s", stdout)
-	}
-}
-
-// Test 25: Doctor with --strict runs full checks
+// Test 24: Doctor with --strict runs full checks
 func TestDoctor_Strict(t *testing.T) {
 	repoPath, _ := initTestRepo(t)
 
 	// Create snapshot
-	runJVSInRepo(t, repoPath, "lock", "acquire")
 	runJVSInRepo(t, repoPath, "snapshot", "v1")
-	runJVSInRepo(t, repoPath, "lock", "release")
 
 	stdout, stderr, code := runJVSInRepo(t, repoPath, "doctor", "--strict")
 	if code != 0 {

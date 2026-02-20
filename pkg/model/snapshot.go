@@ -34,19 +34,18 @@ func (id SnapshotID) String() string {
 	return string(id)
 }
 
-// Descriptor is the on-disk snapshot metadata (11 fields for v0.x).
+// Descriptor is the on-disk snapshot metadata.
 type Descriptor struct {
-	SnapshotID        SnapshotID       `json:"snapshot_id"`
-	ParentID          *SnapshotID      `json:"parent_id,omitempty"`
-	WorktreeName      string           `json:"worktree_name"`
-	CreatedAt         time.Time        `json:"created_at"`
-	Note              string           `json:"note,omitempty"`
-	Engine            EngineType       `json:"engine"`
-	ConsistencyLevel  ConsistencyLevel `json:"consistency_level"`
-	PayloadRootHash   HashValue        `json:"payload_root_hash"`
-	DescriptorChecksum HashValue       `json:"descriptor_checksum"`
-	FencingToken      int64            `json:"fencing_token"`
-	IntegrityState    IntegrityState   `json:"integrity_state"`
+	SnapshotID         SnapshotID     `json:"snapshot_id"`
+	ParentID           *SnapshotID    `json:"parent_id,omitempty"`
+	WorktreeName       string         `json:"worktree_name"`
+	CreatedAt          time.Time      `json:"created_at"`
+	Note               string         `json:"note,omitempty"`
+	Tags               []string       `json:"tags,omitempty"`
+	Engine             EngineType     `json:"engine"`
+	PayloadRootHash    HashValue      `json:"payload_root_hash"`
+	DescriptorChecksum HashValue      `json:"descriptor_checksum"`
+	IntegrityState     IntegrityState `json:"integrity_state"`
 }
 
 // ReadyMarker is the .READY file content indicating complete snapshot.

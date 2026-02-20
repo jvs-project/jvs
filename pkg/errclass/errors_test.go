@@ -10,32 +10,26 @@ import (
 )
 
 func TestJVSError_Error(t *testing.T) {
-	err := errclass.ErrLockConflict.WithMessage("worktree main is locked")
-	assert.Equal(t, "E_LOCK_CONFLICT: worktree main is locked", err.Error())
+	err := errclass.ErrNameInvalid.WithMessage("invalid name")
+	assert.Equal(t, "E_NAME_INVALID: invalid name", err.Error())
 }
 
 func TestJVSError_Is(t *testing.T) {
-	err := errclass.ErrLockConflict.WithMessage("specific message")
-	require.True(t, errors.Is(err, errclass.ErrLockConflict))
-	require.False(t, errors.Is(err, errclass.ErrLockExpired))
+	err := errclass.ErrNameInvalid.WithMessage("specific message")
+	require.True(t, errors.Is(err, errclass.ErrNameInvalid))
+	require.False(t, errors.Is(err, errclass.ErrPathEscape))
 }
 
 func TestJVSError_Code(t *testing.T) {
-	assert.Equal(t, "E_LOCK_CONFLICT", errclass.ErrLockConflict.Code)
-	assert.Equal(t, "E_FENCING_MISMATCH", errclass.ErrFencingMismatch.Code)
+	assert.Equal(t, "E_NAME_INVALID", errclass.ErrNameInvalid.Code)
+	assert.Equal(t, "E_PATH_ESCAPE", errclass.ErrPathEscape.Code)
 }
 
 func TestJVSError_AllErrorsDefined(t *testing.T) {
-	// All 15 v0.x error classes must exist
+	// All v0.x error classes must exist
 	all := []error{
 		errclass.ErrNameInvalid,
 		errclass.ErrPathEscape,
-		errclass.ErrLockConflict,
-		errclass.ErrLockExpired,
-		errclass.ErrLockNotHeld,
-		errclass.ErrFencingMismatch,
-		errclass.ErrClockSkewExceeded,
-		errclass.ErrConsistencyUnavailable,
 		errclass.ErrDescriptorCorrupt,
 		errclass.ErrPayloadHashMismatch,
 		errclass.ErrLineageBroken,
@@ -44,5 +38,5 @@ func TestJVSError_AllErrorsDefined(t *testing.T) {
 		errclass.ErrFormatUnsupported,
 		errclass.ErrAuditChainBroken,
 	}
-	assert.Len(t, all, 15)
+	assert.Len(t, all, 9)
 }

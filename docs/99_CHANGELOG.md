@@ -1,5 +1,46 @@
 # Changelog
 
+## v6.7 — 2026-02-20
+
+### Removed lock mechanism entirely
+- **Lock subsystem removed**: The entire lock/lease/fencing mechanism has been removed. For a local workspace versioning system, distributed locking was over-engineered and provided a false sense of security (it only protected snapshot/restore, not actual file operations).
+- **Simplified snapshot**: `jvs snapshot` no longer requires acquiring a lock first. Just snapshot whenever you want.
+- **Simplified restore**: `jvs restore --inplace` now only requires `--force --reason` (no fencing token).
+- Removed `jvs lock acquire/release/renew/status/steal` commands.
+- Removed `FencingToken` field from snapshot descriptor.
+- Removed lock-related audit event types: `EventTypeLockAcquire`, `EventTypeLockRelease`, `EventTypeLockSteal`.
+- Removed error classes: `E_LOCK_CONFLICT`, `E_LOCK_EXPIRED`, `E_LOCK_NOT_HELD`, `E_FENCING_MISMATCH`, `E_CLOCK_SKEW_EXCEEDED`, `E_CONSISTENCY_UNAVAILABLE`.
+- Removed `.jvs/locks/` directory from repository layout.
+- Removed `isolation` field from worktree config (was always `exclusive`).
+- Updated conformance tests: removed lock-related tests, added in-place restore requirements tests.
+
+### Rationale
+The lock mechanism was designed for distributed systems but JVS is local-first. Users should coordinate their own workflow (when to snapshot, when to restore). The lock only checked at snapshot/restore time but didn't prevent concurrent file writes anyway.
+
+### Affected files
+- Deleted: `internal/lock/manager.go`, `internal/lock/manager_test.go`, `internal/cli/lock.go`, `pkg/model/lock.go`, `test/conformance/lock_test.go`, `docs/07_LOCKING_AND_CONSISTENCY_SPEC.md`
+- Modified: `internal/cli/snapshot.go`, `internal/cli/restore.go`, `internal/snapshot/creator.go`, `internal/restore/restorer.go`, `internal/repo/repo.go`, `pkg/model/snapshot.go`, `pkg/model/audit.go`, `internal/cli/root.go`, `internal/cli/root_test.go`, `internal/doctor/doctor.go`, `internal/gc/collector.go`
+- Updated docs: 00_OVERVIEW, 01_REPO_LAYOUT_SPEC, 02_CLI_SPEC, 03_WORKTREE_SPEC, 04_SNAPSHOT_SCOPE_AND_LINEAGE_SPEC, 05_SNAPSHOT_ENGINE_SPEC, 06_RESTORE_SPEC, 11_CONFORMANCE_TEST_PLAN, 14_TRACEABILITY_MATRIX, 18_MIGRATION_AND_BACKUP, README.md
+
+## v6.6 — 2026-02-20
+
+### Simplified snapshot references: tags replace refs
+- **Removed refs subsystem**: The separate `.jvs/refs/` directory and `jvs ref` commands are removed. For local workspace versioning, a separate refs feature was over-engineered.
+- **Added tags to snapshots**: Tags are now embedded directly in snapshot descriptors as a `tags` array field. This provides a simpler UX - users just work with snapshots and optional tags.
+- `jvs snapshot` now accepts `--tag <tag>` (repeatable) to attach tags during snapshot creation.
+- `jvs history` now supports `--grep <pattern>` (filter by note), `--tag <tag>` (filter by tag), and `--all` (show all snapshots, not just current worktree lineage).
+- `jvs restore` now supports fuzzy snapshot lookup: snapshot-id can be a full ID, short ID prefix, tag name, or note prefix.
+- `jvs restore --latest-tag <tag>` restores the most recent snapshot with the given tag.
+- Removed `EventTypeRefCreate` and `EventTypeRefDelete` audit event types.
+- Removed refs from GC protection rules (tags are embedded in descriptors, so tagged snapshots are protected by lineage).
+- Updated conformance tests: removed ref-related tests, added tag validation test.
+
+### Affected files
+- Deleted: `internal/ref/manager.go`, `internal/ref/manager_test.go`, `internal/cli/ref.go`, `pkg/model/ref.go`, `test/conformance/ref_test.go`
+- Modified: `internal/gc/collector.go`, `internal/repo/repo.go`, `internal/repo/repo_test.go`, `pkg/model/audit.go`, `pkg/model/snapshot.go`, `internal/snapshot/creator.go`, `internal/cli/snapshot.go`, `internal/cli/history.go`, `internal/cli/restore.go`, `internal/cli/root_test.go`
+- Added: `internal/snapshot/catalog.go`
+- Updated docs: 01_REPO_LAYOUT_SPEC, 02_CLI_SPEC, 03_WORKTREE_SPEC, 08_GC_SPEC, 11_CONFORMANCE_TEST_PLAN, 14_TRACEABILITY_MATRIX, 18_MIGRATION_AND_BACKUP, README.md
+
 ## v6.5 — 2026-02-20
 
 ### Scope simplifications for v0.x implementation

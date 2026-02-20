@@ -4,9 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-	"time"
 
-	"github.com/jvs-project/jvs/internal/lock"
 	"github.com/jvs-project/jvs/internal/repo"
 	"github.com/jvs-project/jvs/internal/restore"
 	"github.com/jvs-project/jvs/internal/snapshot"
@@ -22,24 +20,20 @@ func setupTestRepo(t *testing.T) string {
 	return dir
 }
 
-func createSnapshot(t *testing.T, repoPath string) (*model.Descriptor, *model.LockRecord) {
-	mgr := lock.NewManager(repoPath, model.LockPolicy{DefaultLeaseTTL: time.Hour})
-	rec, err := mgr.Acquire("main", "test")
-	require.NoError(t, err)
-
+func createSnapshot(t *testing.T, repoPath string) *model.Descriptor {
 	mainPath := filepath.Join(repoPath, "main")
 	os.WriteFile(filepath.Join(mainPath, "file.txt"), []byte("snapshot-content"), 0644)
 
 	creator := snapshot.NewCreator(repoPath, model.EngineCopy)
-	desc, err := creator.Create("main", "test snapshot", model.ConsistencyQuiesced, rec.FencingToken)
+	desc, err := creator.Create("main", "test snapshot", nil)
 	require.NoError(t, err)
 
-	return desc, rec
+	return desc
 }
 
 func TestRestorer_SafeRestore(t *testing.T) {
 	repoPath := setupTestRepo(t)
-	desc, _ := createSnapshot(t, repoPath)
+	desc := createSnapshot(t, repoPath)
 
 	// Modify main after snapshot
 	mainPath := filepath.Join(repoPath, "main")
@@ -66,7 +60,7 @@ func TestRestorer_SafeRestore(t *testing.T) {
 
 func TestRestorer_SafeRestore_AutoName(t *testing.T) {
 	repoPath := setupTestRepo(t)
-	desc, _ := createSnapshot(t, repoPath)
+	desc := createSnapshot(t, repoPath)
 
 	restorer := restore.NewRestorer(repoPath, model.EngineCopy)
 	cfg, err := restorer.SafeRestore(desc.SnapshotID, "", nil) // auto-name
@@ -76,7 +70,7 @@ func TestRestorer_SafeRestore_AutoName(t *testing.T) {
 
 func TestRestorer_InplaceRestore(t *testing.T) {
 	repoPath := setupTestRepo(t)
-	desc, lockRec := createSnapshot(t, repoPath)
+	desc := createSnapshot(t, repoPath)
 
 	// Modify main after snapshot
 	mainPath := filepath.Join(repoPath, "main")
@@ -84,20 +78,11 @@ func TestRestorer_InplaceRestore(t *testing.T) {
 
 	// Inplace restore
 	restorer := restore.NewRestorer(repoPath, model.EngineCopy)
-	err := restorer.InplaceRestore("main", desc.SnapshotID, lockRec.FencingToken, "testing inplace restore")
+	err := restorer.InplaceRestore(desc.SnapshotID, "testing inplace restore")
 	require.NoError(t, err)
 
 	// Verify content is restored
 	content, err := os.ReadFile(filepath.Join(mainPath, "file.txt"))
 	require.NoError(t, err)
 	assert.Equal(t, "snapshot-content", string(content))
-}
-
-func TestRestorer_InplaceRestore_RequiresFencing(t *testing.T) {
-	repoPath := setupTestRepo(t)
-	desc, _ := createSnapshot(t, repoPath)
-
-	restorer := restore.NewRestorer(repoPath, model.EngineCopy)
-	err := restorer.InplaceRestore("main", desc.SnapshotID, 999, "wrong token")
-	assert.Error(t, err)
 }

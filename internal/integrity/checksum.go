@@ -14,15 +14,14 @@ import (
 func ComputeDescriptorChecksum(desc *model.Descriptor) (model.HashValue, error) {
 	// Create copy with excluded fields zeroed
 	checksumDesc := &model.Descriptor{
-		SnapshotID:        desc.SnapshotID,
-		ParentID:          desc.ParentID,
-		WorktreeName:      desc.WorktreeName,
-		CreatedAt:         desc.CreatedAt,
-		Note:              desc.Note,
-		Engine:            desc.Engine,
-		ConsistencyLevel:  desc.ConsistencyLevel,
-		PayloadRootHash:   desc.PayloadRootHash,
-		FencingToken:      desc.FencingToken,
+		SnapshotID:      desc.SnapshotID,
+		ParentID:        desc.ParentID,
+		WorktreeName:    desc.WorktreeName,
+		CreatedAt:       desc.CreatedAt,
+		Note:            desc.Note,
+		Tags:            desc.Tags,
+		Engine:          desc.Engine,
+		PayloadRootHash: desc.PayloadRootHash,
 		// DescriptorChecksum: excluded
 		// IntegrityState: excluded
 	}

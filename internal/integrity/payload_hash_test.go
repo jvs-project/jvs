@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/jvs-project/jvs/internal/integrity"
 	"github.com/stretchr/testify/assert"
@@ -70,4 +71,52 @@ func TestComputePayloadRootHash_EmptyDir(t *testing.T) {
 	hash, err := integrity.ComputePayloadRootHash(dir)
 	require.NoError(t, err)
 	assert.NotEmpty(t, hash, "empty dir should still produce a hash")
+}
+
+func TestComputePayloadRootHash_DeterministicWithDifferentModTime(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "file.txt")
+	os.WriteFile(file, []byte("content"), 0644)
+
+	hash1, err := integrity.ComputePayloadRootHash(dir)
+	require.NoError(t, err)
+
+	// Change modification time
+	newTime := time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)
+	require.NoError(t, os.Chtimes(file, newTime, newTime))
+
+	hash2, err := integrity.ComputePayloadRootHash(dir)
+	require.NoError(t, err)
+
+	// Hash should be the same despite mod time change (per spec)
+	assert.Equal(t, hash1, hash2, "hash should not depend on modification time")
+}
+
+func TestComputePayloadRootHash_NestedStructure(t *testing.T) {
+	dir := t.TempDir()
+
+	// Create nested structure
+	os.MkdirAll(filepath.Join(dir, "a", "b"), 0755)
+	os.WriteFile(filepath.Join(dir, "a", "file1.txt"), []byte("file1"), 0644)
+	os.WriteFile(filepath.Join(dir, "a", "b", "file2.txt"), []byte("file2"), 0644)
+
+	hash, err := integrity.ComputePayloadRootHash(dir)
+	require.NoError(t, err)
+	assert.NotEmpty(t, hash)
+}
+
+func TestComputePayloadRootHash_SkipsReadyMarker(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "file.txt"), []byte("content"), 0644)
+	os.WriteFile(filepath.Join(dir, ".READY"), []byte(`{"snapshot_id":"test"}`), 0644)
+
+	hash, err := integrity.ComputePayloadRootHash(dir)
+	require.NoError(t, err)
+	assert.NotEmpty(t, hash)
+
+	// Remove .READY and verify hash is the same
+	os.Remove(filepath.Join(dir, ".READY"))
+	hash2, err := integrity.ComputePayloadRootHash(dir)
+	require.NoError(t, err)
+	assert.Equal(t, hash, hash2, ".READY should be excluded from hash")
 }

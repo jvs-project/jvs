@@ -7,23 +7,9 @@ import (
 	"testing"
 )
 
-// Test 4: Snapshot requires lock
-func TestSnapshot_RequiresLock(t *testing.T) {
+// Test 4: Snapshot creates successfully
+func TestSnapshot_Basic(t *testing.T) {
 	repoPath, _ := initTestRepo(t)
-
-	// Try snapshot without lock
-	_, _, code := runJVSInRepo(t, repoPath, "snapshot", "test")
-	if code == 0 {
-		t.Error("snapshot should require lock")
-	}
-}
-
-// Test 5: Snapshot succeeds with lock
-func TestSnapshot_WithLock(t *testing.T) {
-	repoPath, _ := initTestRepo(t)
-
-	// Acquire lock
-	runJVSInRepo(t, repoPath, "lock", "acquire")
 
 	// Create snapshot
 	stdout, stderr, code := runJVSInRepo(t, repoPath, "snapshot", "test snapshot")
@@ -32,5 +18,25 @@ func TestSnapshot_WithLock(t *testing.T) {
 	}
 	if !strings.Contains(stdout, "Created snapshot") {
 		t.Errorf("expected 'Created snapshot' in output, got: %s", stdout)
+	}
+}
+
+// Test 5: Snapshot with tags
+func TestSnapshot_WithTags(t *testing.T) {
+	repoPath, _ := initTestRepo(t)
+
+	// Create snapshot with tags
+	stdout, stderr, code := runJVSInRepo(t, repoPath, "snapshot", "release", "--tag", "v1.0", "--tag", "release")
+	if code != 0 {
+		t.Fatalf("snapshot with tags failed: %s", stderr)
+	}
+	if !strings.Contains(stdout, "Created snapshot") {
+		t.Errorf("expected 'Created snapshot' in output, got: %s", stdout)
+	}
+
+	// Verify tags appear in history
+	historyOut, _, _ := runJVSInRepo(t, repoPath, "history")
+	if !strings.Contains(historyOut, "release") {
+		t.Error("expected tag in history output")
 	}
 }

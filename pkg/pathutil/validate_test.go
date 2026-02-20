@@ -68,3 +68,23 @@ func TestValidatePathSafety_NonExistentTarget(t *testing.T) {
 	require.NoError(t, os.MkdirAll(filepath.Join(root, "worktrees"), 0755))
 	assert.NoError(t, pathutil.ValidatePathSafety(root, target))
 }
+
+func TestValidateTag_Valid(t *testing.T) {
+	valid := []string{"v1.0", "release", "bugfix-123", "my_tag", "A-Z.test"}
+	for _, tag := range valid {
+		assert.NoError(t, pathutil.ValidateTag(tag), "should accept: %s", tag)
+	}
+}
+
+func TestValidateTag_Empty(t *testing.T) {
+	err := pathutil.ValidateTag("")
+	require.ErrorIs(t, err, errclass.ErrNameInvalid)
+}
+
+func TestValidateTag_Invalid(t *testing.T) {
+	invalid := []string{"tag with space", "tag/slash", "tag\\slash", "tag!", "tag@"}
+	for _, tag := range invalid {
+		err := pathutil.ValidateTag(tag)
+		require.ErrorIs(t, err, errclass.ErrNameInvalid, "should reject: %s", tag)
+	}
+}

@@ -12,9 +12,7 @@ func TestVerify_ValidSnapshots(t *testing.T) {
 	repoPath, _ := initTestRepo(t)
 
 	// Create snapshot
-	runJVSInRepo(t, repoPath, "lock", "acquire")
 	runJVSInRepo(t, repoPath, "snapshot", "v1")
-	runJVSInRepo(t, repoPath, "lock", "release")
 
 	// Verify
 	stdout, stderr, code := runJVSInRepo(t, repoPath, "verify", "--all")
@@ -44,10 +42,8 @@ func TestHistory_ShowsSnapshots(t *testing.T) {
 	repoPath, _ := initTestRepo(t)
 
 	// Create snapshots
-	runJVSInRepo(t, repoPath, "lock", "acquire")
 	runJVSInRepo(t, repoPath, "snapshot", "first")
 	runJVSInRepo(t, repoPath, "snapshot", "second")
-	runJVSInRepo(t, repoPath, "lock", "release")
 
 	// Check history
 	stdout, _, code := runJVSInRepo(t, repoPath, "history")

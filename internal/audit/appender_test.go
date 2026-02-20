@@ -48,7 +48,7 @@ func TestFileAppender_HashChain(t *testing.T) {
 	require.NoError(t, err)
 
 	// Second record
-	err = appender.Append(model.EventTypeLockAcquire, "main", "", map[string]any{"nonce": "abc"})
+	err = appender.Append(model.EventTypeWorktreeCreate, "feature", "", map[string]any{"base": "main"})
 	require.NoError(t, err)
 
 	// Read both records

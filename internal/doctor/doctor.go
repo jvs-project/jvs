@@ -4,13 +4,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"time"
 
-	"github.com/jvs-project/jvs/internal/lock"
 	"github.com/jvs-project/jvs/internal/repo"
 	"github.com/jvs-project/jvs/internal/verify"
 	"github.com/jvs-project/jvs/internal/worktree"
-	"github.com/jvs-project/jvs/pkg/model"
 )
 
 // Finding represents a detected issue.
@@ -23,8 +20,8 @@ type Finding struct {
 
 // Result contains doctor check results.
 type Result struct {
-	Healthy  bool       `json:"healthy"`
-	Findings []Finding  `json:"findings"`
+	Healthy  bool      `json:"healthy"`
+	Findings []Finding `json:"findings"`
 }
 
 // Doctor performs repository health checks.
@@ -50,15 +47,12 @@ func (d *Doctor) Check(strict bool) (*Result, error) {
 	// 3. Check for orphan intents
 	d.checkOrphanIntents(result)
 
-	// 4. Check for expired locks
-	d.checkExpiredLocks(result)
-
-	// 5. Check snapshot integrity (if strict)
+	// 4. Check snapshot integrity (if strict)
 	if strict {
 		d.checkSnapshotIntegrity(result)
 	}
 
-	// 6. Check for orphan tmp files
+	// 5. Check for orphan tmp files
 	d.checkOrphanTmp(result)
 
 	return result, nil
@@ -142,23 +136,6 @@ func (d *Doctor) checkOrphanIntents(result *Result) {
 			Severity:    "warning",
 			Path:        filepath.Join(intentsDir, entry.Name()),
 		})
-	}
-}
-
-func (d *Doctor) checkExpiredLocks(result *Result) {
-	wtMgr := worktree.NewManager(d.repoRoot)
-	list, _ := wtMgr.List()
-	lockMgr := lock.NewManager(d.repoRoot, model.LockPolicy{})
-
-	for _, cfg := range list {
-		state, rec, _ := lockMgr.Status(cfg.Name)
-		if state == model.LockStateExpired {
-			result.Findings = append(result.Findings, Finding{
-				Category:    "lock",
-				Description: fmt.Sprintf("expired lock on worktree '%s' (since %s)", cfg.Name, rec.ExpiresAt.Format(time.RFC3339)),
-				Severity:    "info",
-			})
-		}
 	}
 }
 

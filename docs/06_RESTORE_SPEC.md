@@ -1,4 +1,4 @@
-# Restore Spec (v6.5)
+# Restore Spec (v6.7)
 
 ## Default restore (SAFE)
 `jvs restore <snapshot-id>` creates a new worktree.
@@ -8,7 +8,7 @@ Auto-generated worktree name format:
 
 ## Safe restore flow (MUST)
 1. Validate snapshot exists and has READY marker.
-2. Validate descriptor checksum and signature according to trust policy.
+2. Validate descriptor checksum.
 3. Create destination worktree under `repo/worktrees/<name>/` using path-safe checks.
 4. Materialize payload from snapshot.
 5. Write worktree metadata to `.jvs/worktrees/<name>/config.json`.
@@ -17,19 +17,18 @@ Auto-generated worktree name format:
 ## In-place restore (DANGEROUS)
 `jvs restore <snapshot-id> --inplace --force --reason <text>`
 
-### Hard requirements (MUST)
-- In `exclusive`, caller must hold valid lock.
-- Fencing token must match active token.
-- Snapshot checksum and signature validation must pass.
-- `--reason` must be non-empty for audit.
+### Requirements (MUST)
+- Snapshot checksum validation must pass.
+- `--force` is mandatory to confirm the dangerous operation.
+- `--reason` must be non-empty for audit trail.
 
-`--force` bypasses interactive confirmation only.
-`--force` MUST NOT bypass lock, fencing, or integrity checks.
+`--force` confirms the user understands this is a destructive operation that will overwrite the current worktree.
+`--force` MUST NOT bypass integrity checks.
 
 ### Safety checks (MUST)
 Before overwrite:
 - record pre-restore head and integrity summary
-- record `holder_id`, `fencing_token`, `decision_id`, `reason`
+- record `reason` for audit trail
 
 Failure behavior:
 - operation must be atomic at worktree boundary, or

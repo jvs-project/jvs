@@ -91,8 +91,8 @@ func TestWorktree_Path(t *testing.T) {
 	}
 }
 
-// Test 16: Worktree create preserves content
-func TestWorktree_CreatePreservesContent(t *testing.T) {
+// Test 16: Worktree create new worktree is empty
+func TestWorktree_CreateIsEmpty(t *testing.T) {
 	repoPath, _ := initTestRepo(t)
 
 	// Create content in main
@@ -100,9 +100,7 @@ func TestWorktree_CreatePreservesContent(t *testing.T) {
 	os.WriteFile(dataPath, []byte("test content"), 0644)
 
 	// Create snapshot
-	runJVSInRepo(t, repoPath, "lock", "acquire")
 	runJVSInRepo(t, repoPath, "snapshot", "v1")
-	runJVSInRepo(t, repoPath, "lock", "release")
 
 	// Create worktree
 	runJVSInRepo(t, repoPath, "worktree", "create", "feature")

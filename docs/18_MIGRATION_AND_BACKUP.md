@@ -1,4 +1,4 @@
-# Migration & Backup (v6.5)
+# Migration & Backup (v6.7)
 
 JVS does not provide remote replication. Use JuiceFS replication tools.
 
@@ -7,17 +7,16 @@ Use `juicefs sync` for repository migration.
 
 ## Pre-migration gates (MUST)
 1. freeze writers and stop agent jobs
-2. ensure no active writer locks
+2. ensure no active operations
 3. run:
 ```bash
 jvs doctor --strict
 jvs verify --all
 ```
-4. take final `quiesced` snapshots for critical worktrees
+4. take final snapshots for critical worktrees
 
 ## Runtime-state policy (MUST)
 Runtime state is non-portable and must not be migrated as authoritative state:
-- `.jvs/locks/`
 - active `.jvs/intents/`
 
 Destination MUST rebuild runtime state:
@@ -30,7 +29,6 @@ jvs doctor --strict --repair-runtime
 2. sync repository excluding runtime state
 ```bash
 juicefs sync /mnt/src/myrepo/ /mnt/dst/myrepo/ \
-  --exclude '.jvs/locks/**' \
   --exclude '.jvs/intents/**' \
   --update --threads 16
 ```
@@ -48,7 +46,6 @@ Portable history state:
 - `.jvs/worktrees/`
 - `.jvs/snapshots/`
 - `.jvs/descriptors/`
-- `.jvs/refs/`
 - `.jvs/audit/`
 - `.jvs/gc/`
 

@@ -14,6 +14,17 @@ import (
 
 var nameRegex = regexp.MustCompile(`^[a-zA-Z0-9._-]+$`)
 
+// ValidateTag validates a tag string (same rules as worktree names).
+func ValidateTag(tag string) error {
+	if tag == "" {
+		return errclass.ErrNameInvalid.WithMessage("tag must not be empty")
+	}
+	if !nameRegex.MatchString(tag) {
+		return errclass.ErrNameInvalid.WithMessagef("tag must match [a-zA-Z0-9._-]+: %s", tag)
+	}
+	return nil
+}
+
 // ValidateName checks worktree/ref name safety per spec 02/03.
 func ValidateName(name string) error {
 	if name == "" {
