@@ -29,6 +29,11 @@ func ComputePayloadRootHash(root string) (model.HashValue, error) {
 			return nil
 		}
 
+		// Skip .READY marker files (control-plane metadata)
+		if info.Name() == ".READY" {
+			return nil
+		}
+
 		rel, err := filepath.Rel(root, path)
 		if err != nil {
 			return fmt.Errorf("relative path: %w", err)
