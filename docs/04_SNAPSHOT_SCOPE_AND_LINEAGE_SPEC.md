@@ -1,4 +1,4 @@
-# Snapshot Scope & Lineage Spec (v6.4)
+# Snapshot Scope & Lineage Spec (v6.5)
 
 ## Snapshot ID generation (MUST)
 
@@ -31,7 +31,6 @@ Published snapshots live at:
 After READY publication:
 - payload is immutable
 - descriptor is immutable
-- signature metadata is immutable
 - detected mutation marks snapshot `corrupt`
 
 ## Descriptor schema (MUST)
@@ -49,34 +48,16 @@ Required fields:
 - `fencing_token` (nullable only when lockless mode is valid)
 - `descriptor_checksum` (`algo`, `value`)
 - `payload_root_hash` (`algo`, `value`)
-- `signature` (`algo`, `value`)
-- `signing_key_id`
-- `signed_at`
-- `tamper_evidence_state` (`trusted|untrusted|tampered`)
 - `integrity_state` (`verified|unverified|corrupt`)
 
 ## Descriptor checksum coverage (MUST)
 `descriptor_checksum` is computed over all descriptor fields **except**:
 - `descriptor_checksum` itself
-- `signature`
-- `signing_key_id`
-- `signed_at`
-- `tamper_evidence_state`
 - `integrity_state`
 
 Computation:
 1. Serialize covered fields as canonical JSON (sorted keys, no whitespace, UTF-8, no trailing zeros in numbers).
 2. Compute SHA-256 of the serialized bytes.
-
-This allows the checksum to be computed before signing, and the signature to cover the checksum.
-
-## Signature coverage (MUST)
-Descriptor signature MUST cover at least:
-- `descriptor_checksum`
-- `payload_root_hash`
-- `snapshot_id`
-- `parent_snapshot_id`
-- `created_at`
 
 ## Lineage rules
 - Lineage is per worktree via `parent_snapshot_id` chain.
@@ -90,7 +71,5 @@ Descriptor signature MUST cover at least:
 - head pointer mismatch
 - descriptor checksum mismatch
 - payload hash mismatch
-- signature invalid
-- trust policy violation
 
 All findings MUST include machine-readable severity.

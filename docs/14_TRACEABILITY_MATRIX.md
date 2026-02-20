@@ -1,4 +1,4 @@
-# Traceability Matrix (v6.4)
+# Traceability Matrix (v6.5)
 
 This matrix maps product promises to normative specs and conformance tests.
 
@@ -29,19 +29,18 @@ This matrix maps product promises to normative specs and conformance tests.
 - Normative specs:
   - `docs/04_SNAPSHOT_SCOPE_AND_LINEAGE_SPEC.md` (descriptor schema incl. payload hash + signature)
   - `docs/05_SNAPSHOT_ENGINE_SPEC.md` (payload hash generation + READY/durability)
-  - `docs/09_SECURITY_MODEL.md` (trust policy and key lifecycle)
+  - `docs/09_SECURITY_MODEL.md` (integrity model and audit)
   - `docs/02_CLI_SPEC.md` (`verify` default strong mode)
 - Conformance tests:
-  - `docs/11_CONFORMANCE_TEST_PLAN.md` tests 8, 9, 10, 11
+  - `docs/11_CONFORMANCE_TEST_PLAN.md` tests 8, 9
 
 ## Promise 4: Explicit risk labeling for degraded modes
 - Product statement:
-  - `README.md` (shared/best_effort risk labels)
+  - `README.md` (`best_effort` risk labels)
   - `docs/00_OVERVIEW.md` (risk-explicit modes)
 - Normative specs:
   - `docs/07_LOCKING_AND_CONSISTENCY_SPEC.md` (`best_effort` risk exposure)
   - `docs/02_CLI_SPEC.md` (`history` risk labels)
-  - `docs/03_WORKTREE_SPEC.md` (`shared` high-risk constraints)
 - Conformance tests:
   - `docs/11_CONFORMANCE_TEST_PLAN.md` test 5
 
@@ -53,7 +52,7 @@ This matrix maps product promises to normative specs and conformance tests.
   - `docs/18_MIGRATION_AND_BACKUP.md` (exclude `locks/intents`, rebuild runtime)
   - `docs/01_REPO_LAYOUT_SPEC.md` (portability classes)
 - Conformance tests:
-  - `docs/11_CONFORMANCE_TEST_PLAN.md` test 13
+  - `docs/11_CONFORMANCE_TEST_PLAN.md` test 11
 
 ## Promise 6: Safe retention and deletion
 - Product statement:
@@ -62,7 +61,7 @@ This matrix maps product promises to normative specs and conformance tests.
   - `docs/08_GC_SPEC.md` (plan/mark/commit protocol, ref protection)
   - `docs/02_CLI_SPEC.md` (`gc plan`, `gc run --plan-id`)
 - Conformance tests:
-  - `docs/11_CONFORMANCE_TEST_PLAN.md` tests 14, 15, 25
+  - `docs/11_CONFORMANCE_TEST_PLAN.md` tests 12, 13, 22
 
 ## Promise 7: Auditable operation history with tamper evidence
 - Product statement:
@@ -71,7 +70,7 @@ This matrix maps product promises to normative specs and conformance tests.
   - `docs/09_SECURITY_MODEL.md` (audit log format, hash chain, record schema)
   - `docs/02_CLI_SPEC.md` (`doctor` audit chain validation)
 - Conformance tests:
-  - `docs/11_CONFORMANCE_TEST_PLAN.md` tests 16, 17
+  - `docs/11_CONFORMANCE_TEST_PLAN.md` tests 14, 15
 
 ## Promise 8: Deterministic snapshot identity and integrity
 - Product statement:
@@ -79,9 +78,9 @@ This matrix maps product promises to normative specs and conformance tests.
 - Normative specs:
   - `docs/04_SNAPSHOT_SCOPE_AND_LINEAGE_SPEC.md` (snapshot ID generation)
   - `docs/05_SNAPSHOT_ENGINE_SPEC.md` (payload root hash computation)
-  - `docs/09_SECURITY_MODEL.md` (supported algorithms, trust bootstrap)
+  - `docs/09_SECURITY_MODEL.md` (integrity hash algorithms)
 - Conformance tests:
-  - `docs/11_CONFORMANCE_TEST_PLAN.md` tests 20, 21, 22
+  - `docs/11_CONFORMANCE_TEST_PLAN.md` tests 18, 19
 
 ## Promise 9: Pure payload roots with centralized control plane
 - Product statement:
@@ -92,7 +91,7 @@ This matrix maps product promises to normative specs and conformance tests.
   - `docs/03_WORKTREE_SPEC.md` (centralized metadata under `.jvs/worktrees/`)
   - `docs/04_SNAPSHOT_SCOPE_AND_LINEAGE_SPEC.md` (no exclusion logic required)
 - Conformance tests:
-  - `docs/11_CONFORMANCE_TEST_PLAN.md` tests 28, 29, 30, 31, 32
+  - `docs/11_CONFORMANCE_TEST_PLAN.md` tests 25, 26, 27, 28, 29
 
 ## Release gating trace
 - Normative release policy:

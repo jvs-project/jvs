@@ -8,7 +8,6 @@
 ## Lock scope
 - Locks are repo-local files in `.jvs/locks/`.
 - One active writer lock per exclusive worktree.
-- `shared` mode does not provide SWMR guarantees.
 
 ## Lock record schema (MUST)
 - `lock_id`

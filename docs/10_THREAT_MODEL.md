@@ -3,8 +3,8 @@
 ## Assets
 - snapshot payloads
 - descriptors and lineage metadata
-- trust policy and signing keys
 - audit trail
+- descriptor checksums and payload hashes
 
 ## Adversary assumptions
 - can read and write files in repository path with compromised local account
@@ -15,7 +15,7 @@
 1. Stale writer continues after lock steal
    Control: fencing token validation before commit.
 2. Descriptor and checksum both rewritten
-   Control: signature validation against trust root.
+   Control: descriptor checksum + payload root hash detect independent tampering. Coordinated rewrite is a v0.x accepted risk (see 09_SECURITY_MODEL.md).
 3. Path traversal on worktree operations
    Control: strict name validation + canonical path boundary checks.
 4. Crash during snapshot publish
@@ -24,12 +24,9 @@
    Control: runtime-state exclusion and rebuild at destination.
 
 ## Residual risks
-- compromised trusted signing key
 - filesystem or kernel bugs bypassing expected durability semantics
-- intentional use of `shared` mode in high-contention workloads
+- coordinated descriptor + checksum rewrite by attacker with filesystem write access (mitigated by signing in v1.x)
 
 ## Risk labeling
 Commands and JSON output MUST label high-risk states:
-- `shared` mode
 - `best_effort` snapshots
-- untrusted signature chain

@@ -1,11 +1,11 @@
-# Security Model (v6.3)
+# Security Model (v6.5)
 
 ## Scope
 Defines trust, integrity, and operational security requirements for JVS repositories.
 
 ## Security objectives
 - prevent stale-writer corruption via lock + fencing
-- detect descriptor and payload tampering
+- detect descriptor and payload corruption or tampering via checksums and hashes
 - preserve auditable operation history
 
 ## Supported algorithms (MUST)
@@ -14,75 +14,16 @@ Defines trust, integrity, and operational security requirements for JVS reposito
 - `sha256` (default): SHA-256 for `descriptor_checksum` and `payload_root_hash`.
 - Future additions MUST be registered in this spec before use.
 
-### Signature algorithms
-- `ed25519` (default): Ed25519 (RFC 8032) for descriptor signing.
-- Future additions MUST be registered in this spec before use.
-
 Algorithm identifiers in descriptors MUST match values defined here exactly.
-
-## Trust root
-Trust state is stored in `.jvs/trust/`.
-
-Required objects:
-- `keyring.json` (trusted public keys)
-- `policy.json` (verification policy)
-- `revocations.json` (revoked key ids)
-
-## Trust bootstrap (MUST)
-
-### On `jvs init`
-1. If no `--signing-key` is provided:
-   - generate an Ed25519 keypair.
-   - write public key to `.jvs/trust/keyring.json` with `trusted_since = now`.
-   - write private key to `$JVS_SIGNING_KEY_PATH` (default: `~/.jvs/keys/<repo-id>.key`).
-   - private keys MUST NOT be stored inside `.jvs/`.
-2. If `--signing-key <path>` is provided:
-   - import public key into keyring with `trusted_since = now`.
-   - validate key format; fail on mismatch.
-3. Write default `policy.json`:
-   - `require_signature: true`
-   - `require_trusted_key: true`
-   - `allowed_algorithms: ["ed25519"]`
-4. Write empty `revocations.json`: `{"revoked_keys": []}`.
-
-### Keyring schema (MUST)
-```json
-{
-  "keys": [
-    {
-      "key_id": "<hex fingerprint>",
-      "algorithm": "ed25519",
-      "public_key": "<base64>",
-      "trusted_since": "<ISO 8601>",
-      "label": "<optional human name>"
-    }
-  ]
-}
-```
-
-### Signing key resolution
-At snapshot time, JVS resolves the signing key:
-1. `$JVS_SIGNING_KEY` environment variable (inline key or file path).
-2. `$JVS_SIGNING_KEY_PATH` file path.
-3. Default path `~/.jvs/keys/<repo-id>.key`.
-4. If none found, fail with `E_SIGNING_KEY_MISSING`.
 
 ## Integrity model (MUST)
 1. descriptor checksum layer
 2. payload root hash layer
-3. signature/trust layer
 
-Snapshot trust requires all three to pass.
+Snapshot integrity requires both layers to pass.
 
 ## Verification policy
-- `jvs verify` defaults to strong verification (checksum + payload hash + signature/trust chain).
-- `--allow-unsigned` is explicit downgrade for diagnostic use and MUST emit warning severity.
-- release profile MUST NOT use downgrade mode.
-
-## Key lifecycle
-- key rotation MUST be documented in audit
-- revocations are effective from declared timestamp
-- signatures from revoked keys after effective timestamp are invalid
+- `jvs verify` defaults to strong verification (checksum + payload hash).
 
 ## Audit requirements
 Every mutating operation MUST append audit record with:
@@ -131,6 +72,11 @@ Canonical JSON rules for `record_hash` computation:
 - Rotated files are portable history state and included in migration.
 - Rotation appends a final chain-closing record to the old file and a chain-opening record to the new file with `prev_hash` referencing the old file's last `record_hash`.
 
+## v0.x accepted risks
+- An attacker with filesystem write access can rewrite a descriptor and its checksum consistently without detection. Descriptor signing (planned for v1.x) will close this gap.
+- This risk is acceptable for v0.x local single-user and agent workflows.
+
 ## Non-goals
 - encryption-at-rest policy management
 - in-JVS authn/authz framework
+- Descriptor signing and trust policy (deferred to v1.x)

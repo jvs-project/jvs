@@ -1,4 +1,4 @@
-# Snapshot Engine Spec (v6.4)
+# Snapshot Engine Spec (v6.5)
 
 JVS provides one snapshot command with pluggable engines.
 
@@ -45,9 +45,8 @@ If preservation is degraded, command MUST fail or write explicit degraded fields
 6. Build descriptor tmp `.jvs/descriptors/<id>.json.tmp` with:
    - `descriptor_checksum`
    - `payload_root_hash`
-   - signature metadata
 7. Fsync descriptor tmp file.
-8. Write `.READY` in snapshot tmp with descriptor checksum and signing key id; fsync.
+8. Write `.READY` in snapshot tmp with descriptor checksum; fsync.
 9. Rename snapshot tmp -> `.jvs/snapshots/<id>/`; fsync snapshots parent dir.
 10. Rename descriptor tmp -> `.jvs/descriptors/<id>.json`; fsync descriptors parent dir.
 11. Update `head_snapshot_id` in `.jvs/worktrees/<name>/config.json` last; fsync parent dir.
@@ -59,12 +58,8 @@ Success return is allowed only after steps 1-12 complete.
 Descriptor MUST include:
 - `descriptor_checksum`
 - `payload_root_hash`
-- `signature`
-- `signing_key_id`
-- `signed_at`
 
-`jvs verify` defaults to checksum + payload hash + signature/trust validation.
-`--allow-unsigned` is explicit downgrade mode and MUST be warning-labeled.
+`jvs verify` defaults to checksum + payload hash validation.
 
 ## READY marker
 Path: `.jvs/snapshots/<id>/.READY`
@@ -74,7 +69,6 @@ Required contents:
 - engine
 - descriptor checksum
 - payload root hash
-- signing key id
 
 ## Payload root hash computation (MUST)
 The `payload_root_hash` is a deterministic hash over the snapshot payload tree.

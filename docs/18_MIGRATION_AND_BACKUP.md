@@ -1,4 +1,4 @@
-# Migration & Backup (v6.4)
+# Migration & Backup (v6.5)
 
 JVS does not provide remote replication. Use JuiceFS replication tools.
 
@@ -50,7 +50,6 @@ Portable history state:
 - `.jvs/descriptors/`
 - `.jvs/refs/`
 - `.jvs/audit/`
-- `.jvs/trust/`
 - `.jvs/gc/`
 
 Optional payload state:

@@ -1,4 +1,4 @@
-# CLI Spec (v6.4)
+# CLI Spec (v6.5)
 
 This spec defines the JVS command contract.
 
@@ -18,12 +18,10 @@ For all commands accepting `<name>` or path-like values:
 - reject symlink escape outside repo root
 
 ## Repository commands
-### `jvs init <name> [--signing-key <path>] [--json]`
-Create repository skeleton, initialize trust policy, and generate or import signing key.
+### `jvs init <name> [--json]`
+Create repository skeleton.
 - Creates `repo/.jvs/` control plane with all required subdirectories.
 - Creates `repo/main/` payload directory and `.jvs/worktrees/main/config.json` (main worktree metadata).
-- Without `--signing-key`: auto-generate Ed25519 keypair (see `docs/09_SECURITY_MODEL.md` trust bootstrap).
-- With `--signing-key <path>`: import existing public key into keyring.
 
 ### `jvs info [--json]`
 Return engine, policy, lock defaults, and trust policy summary.
@@ -36,26 +34,20 @@ Required JSON fields:
 - `lease_duration_ms`
 - `renew_interval_ms`
 - `max_clock_skew_ms`
-- `trust_policy_summary` (object: `require_signature`, `require_trusted_key`, `allowed_algorithms`)
 - `total_snapshots`
 - `total_worktrees`
 
 ### `jvs doctor [--strict] [--repair-runtime] [--json]`
 Validate layout, lineage, READY protocol, runtime-state hygiene, and repair candidates.
 
-### `jvs verify [--snapshot <id>|--all] [--allow-unsigned] [--json]`
+### `jvs verify [--snapshot <id>|--all] [--json]`
 Default behavior is strong verification:
 - descriptor checksum
 - payload root hash
-- signature chain and trust policy
-
-`--allow-unsigned` is an explicit downgrade for diagnostic/development use and MUST emit warning state.
 
 Required JSON fields:
 - `checksum_valid`
 - `payload_hash_valid`
-- `signature_valid`
-- `trust_chain_valid`
 - `tamper_detected`
 - `severity`
 
@@ -63,8 +55,8 @@ Required JSON fields:
 Execute conformance checks defined in `docs/11_CONFORMANCE_TEST_PLAN.md`.
 
 ## Worktree commands
-### `jvs worktree create <name> [--from <snapshot-id>] [--isolation exclusive|shared]`
-Create worktree with metadata.
+### `jvs worktree create <name> [--from <snapshot-id>]`
+Create worktree with metadata. Isolation is always exclusive in v0.x.
 
 ### `jvs worktree list [--json]`
 List worktrees with isolation, head, and lock state.
@@ -136,4 +128,4 @@ List all refs with target snapshot ID and creation time.
 Delete named reference. Appends audit event.
 
 ## Stable error classes
-`E_NAME_INVALID`, `E_PATH_ESCAPE`, `E_LOCK_CONFLICT`, `E_LOCK_EXPIRED`, `E_LOCK_NOT_HELD`, `E_FENCING_MISMATCH`, `E_CLOCK_SKEW_EXCEEDED`, `E_CONSISTENCY_UNAVAILABLE`, `E_DESCRIPTOR_CORRUPT`, `E_PAYLOAD_HASH_MISMATCH`, `E_SIGNATURE_INVALID`, `E_SIGNING_KEY_MISSING`, `E_TRUST_POLICY_VIOLATION`, `E_LINEAGE_BROKEN`, `E_PARTIAL_SNAPSHOT`, `E_GC_PLAN_MISMATCH`, `E_FORMAT_UNSUPPORTED`, `E_AUDIT_CHAIN_BROKEN`.
+`E_NAME_INVALID`, `E_PATH_ESCAPE`, `E_LOCK_CONFLICT`, `E_LOCK_EXPIRED`, `E_LOCK_NOT_HELD`, `E_FENCING_MISMATCH`, `E_CLOCK_SKEW_EXCEEDED`, `E_CONSISTENCY_UNAVAILABLE`, `E_DESCRIPTOR_CORRUPT`, `E_PAYLOAD_HASH_MISMATCH`, `E_LINEAGE_BROKEN`, `E_PARTIAL_SNAPSHOT`, `E_GC_PLAN_MISMATCH`, `E_FORMAT_UNSUPPORTED`, `E_AUDIT_CHAIN_BROKEN`.

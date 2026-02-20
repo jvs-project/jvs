@@ -8,14 +8,13 @@
 ## Release gates (MUST)
 Before release tag:
 1. `jvs doctor --strict` passes
-2. `jvs verify --all` passes (default strong verification)
+2. `jvs verify --all` passes (checksum + payload hash)
 3. `jvs conformance run --profile release` passes
 4. threat model residual risks reviewed
 5. changelog complete and date-ordered
 
 ## Downgrade policy
-- `--allow-unsigned` is forbidden in release profile.
-- Any artifact verified with downgrade mode is non-release grade.
+- v0.x does not include signature verification. When signing is added in v1.x, `--allow-unsigned` downgrade will be forbidden in release profile.
 
 ## Breaking change process
 - document rationale

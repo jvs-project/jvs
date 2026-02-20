@@ -1,5 +1,23 @@
 # Changelog
 
+## v6.5 — 2026-02-20
+
+### Scope simplifications for v0.x implementation
+- **Shared mode deferred to v1.x**: v0.x supports `exclusive` isolation only. Shared mode requires conflict-resolution semantics not yet designed. Worktree creation no longer accepts `--isolation shared`.
+- **Signing system deferred to v1.x**: v0.x integrity relies on descriptor checksum + payload root hash (2-layer model). Descriptor signing, trust policy, keyring, and key lifecycle are architecturally planned but removed from v0.x scope. Coordinated descriptor+checksum rewrite by an attacker with filesystem access is accepted as v0.x residual risk.
+- Removed `.jvs/trust/` directory from on-disk layout.
+- Removed `--signing-key` from `jvs init`, `--allow-unsigned` from `jvs verify`.
+- Removed error classes: `E_SIGNATURE_INVALID`, `E_SIGNING_KEY_MISSING`, `E_TRUST_POLICY_VIOLATION`.
+- Descriptor schema removes: `signature`, `signing_key_id`, `signed_at`, `tamper_evidence_state`.
+- Conformance tests reduced from 32 to 29 (removed signature/trust tests 10, 11, 21).
+- Pin CLI (`jvs gc pin/unpin`) noted as v1.x planned feature.
+
+### Affected specs
+- 00_OVERVIEW.md, 01_REPO_LAYOUT_SPEC.md, 02_CLI_SPEC.md, 03_WORKTREE_SPEC.md
+- 04_SNAPSHOT_SCOPE_AND_LINEAGE_SPEC.md, 05_SNAPSHOT_ENGINE_SPEC.md
+- 06_RESTORE_SPEC.md, 09_SECURITY_MODEL.md, 10_THREAT_MODEL.md
+- 11_CONFORMANCE_TEST_PLAN.md, 14_TRACEABILITY_MATRIX.md, 18_MIGRATION_AND_BACKUP.md
+
 ## v6.4 (2026-02-20)
 - **Layout migration**: worktree metadata moved from `<worktree>/.jvs-worktree/` to `.jvs/worktrees/<name>/`. Payload roots now contain zero control-plane artifacts. Rationale: `juicefs clone` cannot exclude subdirectories, so payload purity must be structural, not filter-based.
 - Added worktree discovery algorithm (walk-up to repo root, path-based name resolution) in 01_REPO_LAYOUT_SPEC.

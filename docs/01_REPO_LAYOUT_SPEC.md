@@ -1,4 +1,4 @@
-# Repository Layout Spec (v6.4)
+# Repository Layout Spec (v6.5)
 
 ## Definitions
 - Volume: mounted filesystem (JuiceFS preferred)
@@ -21,7 +21,6 @@ repo/
 │   ├── locks/          # runtime state; not migrated as-is
 │   ├── intents/        # in-flight operations; not migrated as-is
 │   ├── audit/          # append-only audit events
-│   ├── trust/          # keyring, trust policy, signature metadata
 │   ├── gc/             # retention policy, pin sets, gc plans/results
 │   └── index.sqlite    # optional, rebuildable
 │
@@ -76,7 +75,7 @@ Refs provide stable, human-readable names for snapshots (e.g., tags, release mar
 - Every worktree payload directory MUST have a corresponding entry in `.jvs/worktrees/<name>/config.json`.
 
 ## Portability classes
-- Portable history state: `format_version`, `worktrees/`, `snapshots/`, `descriptors/`, `refs/`, `audit/`, `trust/`, `gc/`.
+- Portable history state: `format_version`, `worktrees/`, `snapshots/`, `descriptors/`, `refs/`, `audit/`, `gc/`.
 - Rebuildable cache state: `index.sqlite`.
 - Runtime state (non-portable): `locks/`, active `intents/`.
 

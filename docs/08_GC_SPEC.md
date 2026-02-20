@@ -19,6 +19,9 @@ Non-deletable snapshots:
 - snapshots referenced by refs (`.jvs/refs/`)
 
 ## Pin model
+
+Note: v0.x does not include a CLI command for pin management. Pins can be created by writing JSON files directly to `.jvs/gc/pins/<pin_id>.json`. A `jvs gc pin/unpin` CLI interface is planned for v1.x.
+
 Pin fields:
 - `pin_id`
 - `snapshot_id`

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository Nature
 
-This is a **specification-only repository** for JVS (Juicy Versioned Workspaces). There is no implementation code - it contains design specifications, architecture documents, and conformance test plans for a workspace versioning system built on JuiceFS.
+This is a **specification + implementation repository** for JVS (Juicy Versioned Workspaces). It contains design specifications (docs/), an implementation design plan (docs/plans/), and a Go implementation of a workspace versioning system built on JuiceFS.
 
 ## Core Architecture
 
@@ -23,7 +23,7 @@ JVS is a **snapshot-first, filesystem-native versioning layer** (not a Git repla
 | `00_OVERVIEW.md` | Frozen design decisions and product promises |
 | `01_REPO_LAYOUT_SPEC.md` | On-disk structure, worktree discovery, portability classes |
 | `02_CLI_SPEC.md` | Command contract, error classes, JSON output requirements |
-| `03_WORKTREE_SPEC.md` | Worktree lifecycle, isolation modes (exclusive/shared) |
+| `03_WORKTREE_SPEC.md` | Worktree lifecycle, exclusive isolation (shared deferred to v1.x) |
 | `04_SNAPSHOT_SCOPE_AND_LINEAGE_SPEC.md` | Snapshot identity, descriptor schema, lineage chain |
 | `05_SNAPSHOT_ENGINE_SPEC.md` | Engine selection (juicefs-clone/reflink-copy/copy), READY protocol, payload hash |
 | `06_RESTORE_SPEC.md` | Safe default restore vs dangerous in-place restore |
@@ -38,8 +38,8 @@ From CONSTITUTION.md - these are **immutable** without a major version RFC:
 2. **Filesystem as Source of Truth**: No virtualization, no shadow working trees
 3. **`.jvs/` MUST NEVER be in snapshot payload**: Payload roots must contain zero control-plane artifacts
 4. **Safe-by-default restore**: `jvs restore <id>` creates new worktree; `--inplace --force` required for overwrite
-5. **Exclusive mode is default**: `shared` is high-risk and must be explicitly labeled
-6. **Strong verification by default**: Checksum + payload hash + signature chain
+5. **Exclusive mode only (v0.x)**: `shared` mode deferred to v1.x
+6. **Strong verification by default**: Checksum + payload hash (signing deferred to v1.x)
 
 ## Hard Non-Goals
 
@@ -73,6 +73,6 @@ Key commands for reference:
 - `jvs restore <id>` - Safe restore (new worktree)
 - `jvs restore <id> --inplace --force --reason <text>` - Dangerous in-place restore
 - `jvs lock acquire|renew|release|status` - Lock management
-- `jvs verify [--all]` - Strong verification (checksum + hash + signature)
+- `jvs verify [--all]` - Strong verification (checksum + payload hash)
 - `jvs doctor --strict` - Validate layout, lineage, runtime state
 - `jvs gc plan` / `jvs gc run --plan-id <id>` - Two-phase garbage collection

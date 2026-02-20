@@ -14,7 +14,7 @@
 ## Incident: verification failure
 1. freeze writes for affected repo
 2. run `jvs verify --all --json`
-3. classify failure: checksum, payload hash, signature, trust policy
+3. classify failure: checksum, payload hash
 4. escalate tamper events and preserve evidence
 
 ## Incident: partial snapshot artifacts

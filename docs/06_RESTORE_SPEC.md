@@ -1,4 +1,4 @@
-# Restore Spec (v6.4)
+# Restore Spec (v6.5)
 
 ## Default restore (SAFE)
 `jvs restore <snapshot-id>` creates a new worktree.
@@ -34,7 +34,3 @@ Before overwrite:
 Failure behavior:
 - operation must be atomic at worktree boundary, or
 - if atomic boundary cannot be guaranteed, system must emit explicit failed state and recovery steps.
-
-## Shared mode
-- `restore --inplace` remains disabled by default in `shared`.
-- explicit override (future) must emit high-risk warning and audit tag.

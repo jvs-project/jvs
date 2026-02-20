@@ -1,6 +1,6 @@
-# Worktree Spec (v6.4)
+# Worktree Spec (v6.5)
 
-Default mode is isolated (`exclusive`). `shared` is opt-in and high-risk.
+All worktrees use `exclusive` isolation. `shared` mode is deferred to v1.x.
 
 ## Worktree identity
 Worktree metadata is stored centrally under the control plane:
@@ -19,25 +19,18 @@ Worktree payload directories (`repo/main/`, `repo/worktrees/<name>/`) contain **
 - single writer enforced by lock/lease/fencing
 - required for deterministic `quiesced` snapshot operation
 
-### `shared` (high-risk)
-- multiple writers allowed
-- no conflict-resolution semantics in v0.x
-- `restore --inplace` disabled by default
-- snapshots SHOULD be tagged `best_effort` unless an explicit quiesce policy is active
-
 ## `config.json` schema (MUST)
 Path: `repo/.jvs/worktrees/<name>/config.json`
 
 Required fields:
 - `worktree_id`: unique worktree identifier (matches directory name)
-- `isolation`: `exclusive` or `shared`
+- `isolation`: `"exclusive"` (only valid value in v0.x)
 - `created_at`: ISO 8601 timestamp
 - `base_snapshot_id`: snapshot ID used to create this worktree (nullable for `main`)
 - `head_snapshot_id`: current head snapshot (nullable before first snapshot)
 
 Optional fields:
 - `label`: human-readable description
-- `snapshot_defaults`: object with default `consistency_level` override
 
 ## Naming and path rules (MUST)
 - Name charset: `[a-zA-Z0-9._-]+`
