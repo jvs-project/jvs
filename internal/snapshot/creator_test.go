@@ -150,3 +150,83 @@ func TestCreator_FencingValidation(t *testing.T) {
 	_, err := creator.Create("main", "", model.ConsistencyQuiesced, lockRec.FencingToken+1)
 	assert.Error(t, err)
 }
+
+func TestCreator_InvalidWorktree(t *testing.T) {
+	repoPath := setupTestRepo(t)
+
+	creator := snapshot.NewCreator(repoPath, model.EngineCopy)
+	_, err := creator.Create("nonexistent", "", model.ConsistencyQuiesced, 1)
+	require.Error(t, err)
+}
+
+func TestLoadDescriptor(t *testing.T) {
+	repoPath := setupTestRepo(t)
+	lockRec := acquireLock(t, repoPath)
+
+	mainPath := filepath.Join(repoPath, "main")
+	os.WriteFile(filepath.Join(mainPath, "file.txt"), []byte("content"), 0644)
+
+	creator := snapshot.NewCreator(repoPath, model.EngineCopy)
+	desc, err := creator.Create("main", "", model.ConsistencyQuiesced, lockRec.FencingToken)
+	require.NoError(t, err)
+
+	// Load the descriptor
+	loaded, err := snapshot.LoadDescriptor(repoPath, desc.SnapshotID)
+	require.NoError(t, err)
+	assert.Equal(t, desc.SnapshotID, loaded.SnapshotID)
+	assert.Equal(t, desc.Note, loaded.Note)
+}
+
+func TestLoadDescriptor_NotFound(t *testing.T) {
+	repoPath := setupTestRepo(t)
+
+	_, err := snapshot.LoadDescriptor(repoPath, "nonexistent-snapshot-id")
+	require.Error(t, err)
+}
+
+func TestVerifySnapshot(t *testing.T) {
+	repoPath := setupTestRepo(t)
+	lockRec := acquireLock(t, repoPath)
+
+	mainPath := filepath.Join(repoPath, "main")
+	os.WriteFile(filepath.Join(mainPath, "file.txt"), []byte("content"), 0644)
+
+	creator := snapshot.NewCreator(repoPath, model.EngineCopy)
+	desc, err := creator.Create("main", "", model.ConsistencyQuiesced, lockRec.FencingToken)
+	require.NoError(t, err)
+
+	// Verify without payload hash
+	err = snapshot.VerifySnapshot(repoPath, desc.SnapshotID, false)
+	require.NoError(t, err)
+
+	// Verify with payload hash
+	err = snapshot.VerifySnapshot(repoPath, desc.SnapshotID, true)
+	require.NoError(t, err)
+}
+
+func TestVerifySnapshot_InvalidID(t *testing.T) {
+	repoPath := setupTestRepo(t)
+
+	err := snapshot.VerifySnapshot(repoPath, "nonexistent", false)
+	require.Error(t, err)
+}
+
+func TestCreator_DifferentEngines(t *testing.T) {
+	repoPath := setupTestRepo(t)
+	lockRec := acquireLock(t, repoPath)
+
+	mainPath := filepath.Join(repoPath, "main")
+	os.WriteFile(filepath.Join(mainPath, "file.txt"), []byte("content"), 0644)
+
+	// Test with Copy engine
+	creator := snapshot.NewCreator(repoPath, model.EngineCopy)
+	desc, err := creator.Create("main", "copy", model.ConsistencyQuiesced, lockRec.FencingToken)
+	require.NoError(t, err)
+	assert.Equal(t, model.EngineCopy, desc.Engine)
+
+	// Test with Reflink engine (falls back to copy on unsupported filesystem)
+	creator2 := snapshot.NewCreator(repoPath, model.EngineReflinkCopy)
+	desc2, err := creator2.Create("main", "reflink", model.ConsistencyQuiesced, lockRec.FencingToken)
+	require.NoError(t, err)
+	assert.Equal(t, model.EngineReflinkCopy, desc2.Engine)
+}

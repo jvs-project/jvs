@@ -96,8 +96,9 @@ func (e *ReflinkEngine) reflinkFile(src, dst string, info os.FileInfo) error {
 	defer dstFile.Close()
 
 	// Try FICLONE ioctl (Linux)
+	// FICLONE: ioctl(dest_fd, FICLONE, src_fd)
 	const FICLONE = 0x40049409
-	_, _, errno := syscall.Syscall(syscall.SYS_IOCTL, dstFile.Fd(), uintptr(srcFile.Fd()), 0)
+	_, _, errno := syscall.Syscall(syscall.SYS_IOCTL, dstFile.Fd(), FICLONE, srcFile.Fd())
 	if errno != 0 {
 		dstFile.Close()
 		os.Remove(dst)

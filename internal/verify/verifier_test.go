@@ -70,3 +70,35 @@ func TestVerifier_VerifyAll(t *testing.T) {
 		assert.True(t, r.ChecksumValid)
 	}
 }
+
+func TestVerifier_VerifySnapshot_Nonexistent(t *testing.T) {
+	repoPath := setupTestRepo(t)
+
+	v := verify.NewVerifier(repoPath)
+	result, err := v.VerifySnapshot("nonexistent-snapshot-id", false)
+	require.NoError(t, err)
+	assert.True(t, result.TamperDetected)
+	assert.Equal(t, "critical", result.Severity)
+	assert.NotEmpty(t, result.Error)
+}
+
+func TestVerifier_VerifyAll_Empty(t *testing.T) {
+	repoPath := setupTestRepo(t)
+
+	v := verify.NewVerifier(repoPath)
+	results, err := v.VerifyAll(false)
+	require.NoError(t, err)
+	assert.Empty(t, results)
+}
+
+func TestVerifier_VerifySnapshot_NoPayloadHash(t *testing.T) {
+	repoPath := setupTestRepo(t)
+	snapshotID := createTestSnapshot(t, repoPath)
+
+	v := verify.NewVerifier(repoPath)
+	result, err := v.VerifySnapshot(snapshotID, false)
+	require.NoError(t, err)
+	assert.True(t, result.ChecksumValid)
+	assert.False(t, result.PayloadHashValid) // Not verified when verifyPayloadHash=false
+	assert.False(t, result.TamperDetected)
+}

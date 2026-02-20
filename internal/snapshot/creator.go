@@ -30,13 +30,9 @@ func NewCreator(repoRoot string, engineType model.EngineType) *Creator {
 	var eng engine.Engine
 	switch engineType {
 	case model.EngineJuiceFSClone:
-		// TODO: implement juicefs engine
-		eng = engine.NewCopyEngine()
-		engineType = model.EngineCopy
+		eng = engine.NewJuiceFSEngine()
 	case model.EngineReflinkCopy:
-		// TODO: implement reflink engine
-		eng = engine.NewCopyEngine()
-		engineType = model.EngineCopy
+		eng = engine.NewReflinkEngine()
 	default:
 		eng = engine.NewCopyEngine()
 	}

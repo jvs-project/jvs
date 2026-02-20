@@ -226,9 +226,14 @@ func (c *Collector) deleteSnapshot(snapshotID model.SnapshotID) error {
 
 func (c *Collector) writePlan(plan *model.GCPlan) error {
 	gcDir := filepath.Join(c.repoRoot, ".jvs", "gc")
-	os.MkdirAll(gcDir, 0755)
+	if err := os.MkdirAll(gcDir, 0755); err != nil {
+		return fmt.Errorf("create gc dir: %w", err)
+	}
 	path := filepath.Join(gcDir, plan.PlanID+".json")
-	data, _ := json.MarshalIndent(plan, "", "  ")
+	data, err := json.MarshalIndent(plan, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal plan: %w", err)
+	}
 	return fsutil.AtomicWrite(path, data, 0644)
 }
 
@@ -251,9 +256,14 @@ func (c *Collector) deletePlan(planID string) {
 }
 
 func (c *Collector) writeTombstone(tombstone *model.Tombstone) {
-	gcDir := filepath.Join(c.repoRoot, ".jvs", "gc")
-	os.MkdirAll(gcDir, 0755)
-	path := filepath.Join(gcDir, "tombstones", string(tombstone.SnapshotID)+".json")
-	data, _ := json.MarshalIndent(tombstone, "", "  ")
+	gcDir := filepath.Join(c.repoRoot, ".jvs", "gc", "tombstones")
+	if err := os.MkdirAll(gcDir, 0755); err != nil {
+		return // Best effort - log in production
+	}
+	path := filepath.Join(gcDir, string(tombstone.SnapshotID)+".json")
+	data, err := json.MarshalIndent(tombstone, "", "  ")
+	if err != nil {
+		return
+	}
 	fsutil.AtomicWrite(path, data, 0644)
 }

@@ -91,3 +91,65 @@ func TestCopyEngine_Name(t *testing.T) {
 	eng := engine.NewCopyEngine()
 	assert.Equal(t, model.EngineCopy, eng.Name())
 }
+
+func TestCopyEngine_EmptyDirectory(t *testing.T) {
+	src := t.TempDir()
+	dst := t.TempDir()
+	dstPath := filepath.Join(dst, "cloned")
+
+	eng := engine.NewCopyEngine()
+	result, err := eng.Clone(src, dstPath)
+	require.NoError(t, err)
+	assert.False(t, result.Degraded)
+
+	// Verify dst exists and is empty
+	entries, err := os.ReadDir(dstPath)
+	require.NoError(t, err)
+	assert.Empty(t, entries)
+}
+
+func TestCopyEngine_SourceNotFound(t *testing.T) {
+	dst := t.TempDir()
+	dstPath := filepath.Join(dst, "cloned")
+
+	eng := engine.NewCopyEngine()
+	_, err := eng.Clone("/nonexistent/source", dstPath)
+	require.Error(t, err)
+}
+
+func TestCopyEngine_NestedDirectories(t *testing.T) {
+	src := t.TempDir()
+	dst := t.TempDir()
+	dstPath := filepath.Join(dst, "cloned")
+
+	// Create deeply nested structure
+	os.MkdirAll(filepath.Join(src, "a", "b", "c", "d"), 0755)
+	os.WriteFile(filepath.Join(src, "a", "b", "c", "d", "deep.txt"), []byte("deep"), 0644)
+
+	eng := engine.NewCopyEngine()
+	_, err := eng.Clone(src, dstPath)
+	require.NoError(t, err)
+
+	// Verify deep file exists
+	content, err := os.ReadFile(filepath.Join(dstPath, "a", "b", "c", "d", "deep.txt"))
+	require.NoError(t, err)
+	assert.Equal(t, "deep", string(content))
+}
+
+func TestCopyEngine_BrokenSymlink(t *testing.T) {
+	src := t.TempDir()
+	dst := t.TempDir()
+	dstPath := filepath.Join(dst, "cloned")
+
+	// Create a broken symlink
+	require.NoError(t, os.Symlink("nonexistent", filepath.Join(src, "broken-link")))
+
+	eng := engine.NewCopyEngine()
+	_, err := eng.Clone(src, dstPath)
+	require.NoError(t, err)
+
+	// Symlink should be copied even if broken
+	target, err := os.Readlink(filepath.Join(dstPath, "broken-link"))
+	require.NoError(t, err)
+	assert.Equal(t, "nonexistent", target)
+}
