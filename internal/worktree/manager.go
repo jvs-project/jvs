@@ -154,6 +154,7 @@ func (m *Manager) Remove(name string) error {
 }
 
 // UpdateHead atomically updates the head snapshot ID for a worktree.
+// This is used by restore to move to a different point in history.
 func (m *Manager) UpdateHead(name string, snapshotID model.SnapshotID) error {
 	cfg, err := repo.LoadWorktreeConfig(m.repoRoot, name)
 	if err != nil {
@@ -161,4 +162,65 @@ func (m *Manager) UpdateHead(name string, snapshotID model.SnapshotID) error {
 	}
 	cfg.HeadSnapshotID = snapshotID
 	return repo.WriteWorktreeConfig(m.repoRoot, name, cfg)
+}
+
+// SetLatest updates both head and latest snapshot IDs for a worktree.
+// This is used by snapshot creation to mark a new latest state.
+func (m *Manager) SetLatest(name string, snapshotID model.SnapshotID) error {
+	cfg, err := repo.LoadWorktreeConfig(m.repoRoot, name)
+	if err != nil {
+		return fmt.Errorf("load config: %w", err)
+	}
+	cfg.HeadSnapshotID = snapshotID
+	cfg.LatestSnapshotID = snapshotID
+	return repo.WriteWorktreeConfig(m.repoRoot, name, cfg)
+}
+
+// Fork creates a new worktree from a snapshot with content cloned.
+// The new worktree will be at HEAD state (can create snapshots immediately).
+func (m *Manager) Fork(snapshotID model.SnapshotID, name string, cloneFunc func(src, dst string) error) (*model.WorktreeConfig, error) {
+	if err := pathutil.ValidateName(name); err != nil {
+		return nil, err
+	}
+
+	// Check if already exists
+	configPath := repo.WorktreeConfigPath(m.repoRoot, name)
+	if _, err := os.Stat(configPath); err == nil {
+		return nil, fmt.Errorf("worktree %s already exists", name)
+	}
+
+	// Create payload directory
+	payloadPath := repo.WorktreePayloadPath(m.repoRoot, name)
+	if err := os.MkdirAll(payloadPath, 0755); err != nil {
+		return nil, fmt.Errorf("create payload directory: %w", err)
+	}
+
+	// Clone snapshot content to worktree
+	snapshotDir := filepath.Join(m.repoRoot, ".jvs", "snapshots", string(snapshotID))
+	if err := cloneFunc(snapshotDir, payloadPath); err != nil {
+		os.RemoveAll(payloadPath)
+		return nil, fmt.Errorf("clone snapshot content: %w", err)
+	}
+
+	// Create config directory
+	configDir := filepath.Dir(configPath)
+	if err := os.MkdirAll(configDir, 0755); err != nil {
+		os.RemoveAll(payloadPath)
+		return nil, fmt.Errorf("create config directory: %w", err)
+	}
+
+	// Create config with both head and latest set (HEAD state)
+	cfg := &model.WorktreeConfig{
+		Name:            name,
+		CreatedAt:       time.Now().UTC(),
+		HeadSnapshotID:  snapshotID,
+		LatestSnapshotID: snapshotID,
+	}
+
+	if err := repo.WriteWorktreeConfig(m.repoRoot, name, cfg); err != nil {
+		os.RemoveAll(payloadPath)
+		return nil, fmt.Errorf("write config: %w", err)
+	}
+
+	return cfg, nil
 }

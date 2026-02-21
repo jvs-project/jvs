@@ -1,35 +1,90 @@
-# Restore Spec (v6.7)
+# Restore Spec (v7.0)
 
-## Default restore (SAFE)
-`jvs restore <snapshot-id>` creates a new worktree.
+## Overview
 
-Auto-generated worktree name format:
-`restore-<shortid>-<YYYYMMDD>-<HHMMSS>-<rand4>`
+The `restore` command has a single behavior: **inplace restore** of a worktree to a specific snapshot.
 
-## Safe restore flow (MUST)
-1. Validate snapshot exists and has READY marker.
-2. Validate descriptor checksum.
-3. Create destination worktree under `repo/worktrees/<name>/` using path-safe checks.
-4. Materialize payload from snapshot.
-5. Write worktree metadata to `.jvs/worktrees/<name>/config.json`.
-6. Append audit record and return created path.
+After restore, the worktree enters **detached state** (unless restoring to HEAD).
 
-## In-place restore (DANGEROUS)
-`jvs restore <snapshot-id> --inplace --force --reason <text>`
+## Command
 
-### Requirements (MUST)
-- Snapshot checksum validation must pass.
-- `--force` is mandatory to confirm the dangerous operation.
-- `--reason` must be non-empty for audit trail.
+```
+jvs restore <snapshot-id>
+jvs restore HEAD
+```
 
-`--force` confirms the user understands this is a destructive operation that will overwrite the current worktree.
-`--force` MUST NOT bypass integrity checks.
+### Arguments
 
-### Safety checks (MUST)
-Before overwrite:
-- record pre-restore head and integrity summary
-- record `reason` for audit trail
+- `<snapshot-id>`: The snapshot to restore to. Can be:
+  - Full snapshot ID
+  - Short ID prefix
+  - Tag name
+  - Note prefix (fuzzy match)
+- `HEAD`: Special keyword to restore to the latest snapshot (exit detached state)
 
-Failure behavior:
-- operation must be atomic at worktree boundary, or
-- if atomic boundary cannot be guaranteed, system must emit explicit failed state and recovery steps.
+## Behavior
+
+### Default Restore (inplace)
+
+1. Validate snapshot exists and passes integrity check.
+2. Atomically replace worktree content with snapshot content.
+3. Update worktree's `head_snapshot_id` to the restored snapshot.
+4. Worktree is now in **detached state** (unless this is the latest snapshot).
+
+### Restore HEAD
+
+1. Look up the worktree's `latest_snapshot_id`.
+2. Perform restore to that snapshot.
+3. Worktree is now at **HEAD state**.
+
+## Detached State
+
+A worktree is in **detached state** when `head_snapshot_id != latest_snapshot_id`.
+
+In detached state:
+- **Cannot create snapshots** - must use `worktree fork` first
+- Can still modify files (but cannot save changes via snapshot)
+- Can navigate to other snapshots via `restore`
+- Can return to HEAD via `restore HEAD`
+
+## Safety
+
+Restore is **safe by default**:
+- No data is lost - all snapshots are preserved
+- The lineage chain remains intact
+- GC will not delete snapshots in the lineage
+
+## Examples
+
+```bash
+# Restore to specific snapshot
+jvs restore 1771589366482-abc12345
+
+# Restore by tag
+jvs restore v1.0
+
+# Return to latest state
+jvs restore HEAD
+
+# After restore, create branch if you want to continue working
+jvs restore v1.0              # Now in detached state
+jvs worktree fork hotfix-123  # Create new worktree from here
+```
+
+## Error Handling
+
+| Error | Cause | Resolution |
+|-------|-------|------------|
+| Snapshot not found | Invalid ID or tag | Use `history` to find valid IDs |
+| Cannot snapshot in detached state | Attempted `snapshot` while detached | Use `worktree fork` or `restore HEAD` |
+
+## Migration from v6.x
+
+In v6.x, `restore` had two modes:
+- Default: created new worktree (`SafeRestore`)
+- `--inplace --force --reason`: overwrote current worktree
+
+In v7.0:
+- `restore` always does inplace
+- Use `worktree fork` to create new worktree from snapshot
+- No more `--inplace`, `--force`, `--reason` flags

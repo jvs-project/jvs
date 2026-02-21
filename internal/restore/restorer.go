@@ -41,54 +41,12 @@ func NewRestorer(repoRoot string, engineType model.EngineType) *Restorer {
 	}
 }
 
-// SafeRestore creates a new worktree from a snapshot.
-// This is the default, safe restore operation.
-func (r *Restorer) SafeRestore(snapshotID model.SnapshotID, name string, parentSnapshotID *model.SnapshotID) (*model.WorktreeConfig, error) {
+// Restore replaces the content of a worktree with a snapshot.
+// This puts the worktree into a "detached" state (unless restoring to HEAD).
+// The worktree is specified by name, not derived from the snapshot.
+func (r *Restorer) Restore(worktreeName string, snapshotID model.SnapshotID) error {
 	// Load and verify snapshot
 	_, err := snapshot.LoadDescriptor(r.repoRoot, snapshotID)
-	if err != nil {
-		return nil, fmt.Errorf("load snapshot: %w", err)
-	}
-
-	// Verify snapshot integrity
-	if err := snapshot.VerifySnapshot(r.repoRoot, snapshotID, false); err != nil {
-		return nil, fmt.Errorf("verify snapshot: %w", err)
-	}
-
-	// Generate name if not provided
-	if name == "" {
-		name = fmt.Sprintf("restore-%s", snapshotID.ShortID())
-	}
-
-	// Create worktree
-	wtMgr := worktree.NewManager(r.repoRoot)
-	cfg, err := wtMgr.Create(name, &snapshotID)
-	if err != nil {
-		return nil, fmt.Errorf("create worktree: %w", err)
-	}
-
-	// Clone snapshot to worktree
-	snapshotDir := filepath.Join(r.repoRoot, ".jvs", "snapshots", string(snapshotID))
-	payloadPath := wtMgr.Path(name)
-
-	if _, err := r.engine.Clone(snapshotDir, payloadPath); err != nil {
-		wtMgr.Remove(name)
-		return nil, fmt.Errorf("clone snapshot: %w", err)
-	}
-
-	// Audit log
-	r.auditLogger.Append(model.EventTypeRestore, name, snapshotID, map[string]any{
-		"mode": "safe",
-	})
-
-	return cfg, nil
-}
-
-// InplaceRestore replaces the content of an existing worktree with a snapshot.
-// This is dangerous and requires force + reason.
-func (r *Restorer) InplaceRestore(snapshotID model.SnapshotID, reason string) error {
-	// Load and verify snapshot
-	desc, err := snapshot.LoadDescriptor(r.repoRoot, snapshotID)
 	if err != nil {
 		return fmt.Errorf("load snapshot: %w", err)
 	}
@@ -99,7 +57,11 @@ func (r *Restorer) InplaceRestore(snapshotID model.SnapshotID, reason string) er
 
 	// Get worktree info
 	wtMgr := worktree.NewManager(r.repoRoot)
-	worktreeName := desc.WorktreeName
+	cfg, err := wtMgr.Get(worktreeName)
+	if err != nil {
+		return fmt.Errorf("get worktree: %w", err)
+	}
+
 	payloadPath := wtMgr.Path(worktreeName)
 
 	// Create backup directory for atomic swap
@@ -130,17 +92,34 @@ func (r *Restorer) InplaceRestore(snapshotID model.SnapshotID, reason string) er
 		os.RemoveAll(backupPath)
 	}()
 
-	// Step 4: Update head
+	// Step 4: Update head (NOT latest - this puts worktree in detached state)
 	if err := wtMgr.UpdateHead(worktreeName, snapshotID); err != nil {
 		// Don't fail, head update is secondary
 		fmt.Fprintf(os.Stderr, "warning: failed to update head: %v\n", err)
 	}
 
+	// Determine if we're now detached
+	isDetached := snapshotID != cfg.LatestSnapshotID
+
 	// Audit log
 	r.auditLogger.Append(model.EventTypeRestore, worktreeName, snapshotID, map[string]any{
-		"mode":   "inplace",
-		"reason": reason,
+		"detached": isDetached,
 	})
 
 	return nil
+}
+
+// RestoreToLatest restores a worktree to its latest snapshot (exits detached state).
+func (r *Restorer) RestoreToLatest(worktreeName string) error {
+	wtMgr := worktree.NewManager(r.repoRoot)
+	cfg, err := wtMgr.Get(worktreeName)
+	if err != nil {
+		return fmt.Errorf("get worktree: %w", err)
+	}
+
+	if cfg.LatestSnapshotID == "" {
+		return fmt.Errorf("worktree has no snapshots")
+	}
+
+	return r.Restore(worktreeName, cfg.LatestSnapshotID)
 }

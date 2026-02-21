@@ -136,8 +136,8 @@ func (c *Creator) Create(worktreeName, note string, tags []string) (*model.Descr
 		return nil, fmt.Errorf("write descriptor: %w", err)
 	}
 
-	// Step 11: Update worktree head
-	if err := wtMgr.UpdateHead(worktreeName, snapshotID); err != nil {
+	// Step 11: Update worktree head and latest
+	if err := wtMgr.SetLatest(worktreeName, snapshotID); err != nil {
 		// Don't remove snapshot, it's valid
 		return nil, fmt.Errorf("update head: %w", err)
 	}

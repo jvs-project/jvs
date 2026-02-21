@@ -6,7 +6,10 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/jvs-project/jvs/internal/engine"
+	"github.com/jvs-project/jvs/internal/snapshot"
 	"github.com/jvs-project/jvs/internal/worktree"
+	"github.com/jvs-project/jvs/pkg/model"
 )
 
 var worktreeCmd = &cobra.Command{
@@ -129,11 +132,148 @@ var worktreeRemoveCmd = &cobra.Command{
 	},
 }
 
+var worktreeForkCmd = &cobra.Command{
+	Use:   "fork [snapshot-id] [name]",
+	Short: "Create a new worktree from a snapshot",
+	Long: `Create a new worktree from a snapshot.
+
+The new worktree will be at HEAD state - you can create snapshots immediately.
+
+If snapshot-id is omitted, uses the current worktree's position.
+If name is omitted, auto-generates a name.
+
+The snapshot-id can be:
+  - A full snapshot ID
+  - A short ID prefix
+  - A tag name
+  - A note prefix (fuzzy match)
+
+Examples:
+  jvs worktree fork                           # Fork from current position, auto-name
+  jvs worktree fork feature-x                 # Fork from current position with name
+  jvs worktree fork v1.0 hotfix               # Fork from tag v1.0, name hotfix
+  jvs worktree fork 1771589-abc feature-y     # Fork from specific snapshot`,
+	Args: cobra.MaximumNArgs(2),
+	Run: func(cmd *cobra.Command, args []string) {
+		r, wtName := requireWorktree()
+
+		var snapshotID model.SnapshotID
+		var name string
+
+		// Parse arguments
+		switch len(args) {
+		case 0:
+			// No args: use current position, auto-generate name
+			mgr := worktree.NewManager(r.Root)
+			cfg, err := mgr.Get(wtName)
+			if err != nil {
+				fmtErr("get current worktree: %v", err)
+				os.Exit(1)
+			}
+			if cfg.HeadSnapshotID == "" {
+				fmtErr("current worktree has no snapshots to fork from")
+				os.Exit(1)
+			}
+			snapshotID = cfg.HeadSnapshotID
+			name = "" // auto-generate
+
+		case 1:
+			// One arg: could be snapshot-id or name
+			// Try to interpret as snapshot-id first
+			arg := args[0]
+			testID := model.SnapshotID(arg)
+
+			// Check if it looks like a valid snapshot ID or can be resolved
+			_, err := snapshot.LoadDescriptor(r.Root, testID)
+			if err != nil {
+				// Try fuzzy match
+				desc, fuzzyErr := snapshot.FindOne(r.Root, arg)
+				if fuzzyErr == nil {
+					// It's a snapshot reference
+					snapshotID = desc.SnapshotID
+					name = "" // auto-generate
+				} else {
+					// Not a snapshot, treat as name, use current position
+					mgr := worktree.NewManager(r.Root)
+					cfg, err := mgr.Get(wtName)
+					if err != nil {
+						fmtErr("get current worktree: %v", err)
+						os.Exit(1)
+					}
+					if cfg.HeadSnapshotID == "" {
+						fmtErr("current worktree has no snapshots to fork from")
+						os.Exit(1)
+					}
+					snapshotID = cfg.HeadSnapshotID
+					name = arg
+				}
+			} else {
+				// Valid snapshot ID
+				snapshotID = testID
+				name = "" // auto-generate
+			}
+
+		case 2:
+			// Two args: snapshot-id and name
+			snapshotArg := args[0]
+			name = args[1]
+
+			testID := model.SnapshotID(snapshotArg)
+			_, err := snapshot.LoadDescriptor(r.Root, testID)
+			if err != nil {
+				// Try fuzzy match
+				desc, fuzzyErr := snapshot.FindOne(r.Root, snapshotArg)
+				if fuzzyErr != nil {
+					fmtErr("snapshot not found: %v (fuzzy search: %v)", err, fuzzyErr)
+					os.Exit(1)
+				}
+				snapshotID = desc.SnapshotID
+			} else {
+				snapshotID = testID
+			}
+		}
+
+		// Auto-generate name if not provided
+		if name == "" {
+			name = fmt.Sprintf("fork-%s", snapshotID.ShortID())
+		}
+
+		// Verify snapshot exists and is valid
+		if err := snapshot.VerifySnapshot(r.Root, snapshotID, false); err != nil {
+			fmtErr("verify snapshot: %v", err)
+			os.Exit(1)
+		}
+
+		// Create engine for cloning
+		eng := engine.NewCopyEngine()
+
+		// Fork the worktree
+		mgr := worktree.NewManager(r.Root)
+		cfg, err := mgr.Fork(snapshotID, name, func(src, dst string) error {
+			_, err := eng.Clone(src, dst)
+			return err
+		})
+		if err != nil {
+			fmtErr("fork worktree: %v", err)
+			os.Exit(1)
+		}
+
+		if jsonOutput {
+			outputJSON(cfg)
+		} else {
+			fmt.Printf("Created worktree '%s' from snapshot %s\n", name, snapshotID)
+			fmt.Printf("Path: %s\n", mgr.Path(name))
+			fmt.Println("Worktree is at HEAD state - you can create snapshots.")
+		}
+	},
+}
+
 func init() {
 	worktreeCmd.AddCommand(worktreeCreateCmd)
 	worktreeCmd.AddCommand(worktreeListCmd)
 	worktreeCmd.AddCommand(worktreePathCmd)
 	worktreeCmd.AddCommand(worktreeRenameCmd)
 	worktreeCmd.AddCommand(worktreeRemoveCmd)
+	worktreeCmd.AddCommand(worktreeForkCmd)
 	rootCmd.AddCommand(worktreeCmd)
 }

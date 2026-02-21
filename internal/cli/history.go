@@ -7,8 +7,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/jvs-project/jvs/internal/repo"
 	"github.com/jvs-project/jvs/internal/snapshot"
+	"github.com/jvs-project/jvs/internal/worktree"
 	"github.com/jvs-project/jvs/pkg/model"
 )
 
@@ -25,11 +25,27 @@ var historyCmd = &cobra.Command{
 	Long: `Show snapshot history for the current worktree.
 
 Traverses the lineage chain from head backwards.
-Use --all to show all snapshots in the repository, not just the current worktree's lineage.`,
+Use --all to show all snapshots in the repository, not just the current worktree's lineage.
+
+The output shows:
+  - [HEAD] marker on the latest snapshot in the lineage
+  - Current position indicator (you are here)`,
 	Run: func(cmd *cobra.Command, args []string) {
 		r, wtName := requireWorktree()
 
 		var history []*model.Descriptor
+		var latestSnapshotID model.SnapshotID
+		var currentSnapshotID model.SnapshotID
+
+		// Get worktree config to know current state
+		wtMgr := worktree.NewManager(r.Root)
+		cfg, err := wtMgr.Get(wtName)
+		if err != nil {
+			fmtErr("load worktree config: %v", err)
+			os.Exit(1)
+		}
+		currentSnapshotID = cfg.HeadSnapshotID
+		latestSnapshotID = cfg.LatestSnapshotID
 
 		if historyAll {
 			// Show all snapshots with optional filtering
@@ -45,12 +61,6 @@ Use --all to show all snapshots in the repository, not just the current worktree
 			}
 		} else {
 			// Show lineage for current worktree
-			cfg, err := repo.LoadWorktreeConfig(r.Root, wtName)
-			if err != nil {
-				fmtErr("load worktree config: %v", err)
-				os.Exit(1)
-			}
-
 			if cfg.HeadSnapshotID == "" {
 				if jsonOutput {
 					outputJSON([]any{})
@@ -95,6 +105,8 @@ Use --all to show all snapshots in the repository, not just the current worktree
 			return
 		}
 
+		// Print history with markers
+		isDetached := cfg.IsDetached()
 		for _, desc := range history {
 			note := desc.Note
 			if note == "" {
@@ -104,7 +116,33 @@ Use --all to show all snapshots in the repository, not just the current worktree
 			if len(desc.Tags) > 0 {
 				tagsStr = "  [" + strings.Join(desc.Tags, ",") + "]"
 			}
-			fmt.Printf("%s  %s  %s%s\n", desc.SnapshotID.ShortID(), desc.CreatedAt.Format("2006-01-02 15:04"), note, tagsStr)
+
+			// Build marker string
+			marker := ""
+			if !historyAll {
+				// Mark HEAD (latest in lineage)
+				if desc.SnapshotID == latestSnapshotID {
+					marker = "  [HEAD]"
+				}
+			}
+
+			// Print the line
+			fmt.Printf("%s  %s  %s%s%s\n",
+				desc.SnapshotID.ShortID(),
+				desc.CreatedAt.Format("2006-01-02 15:04"),
+				note,
+				tagsStr,
+				marker,
+			)
+
+			// Show "you are here" marker after current position
+			if desc.SnapshotID == currentSnapshotID {
+				if isDetached {
+					fmt.Println("◄── you are here (detached)")
+				} else if !historyAll {
+					fmt.Println("◄── you are here (HEAD)")
+				}
+			}
 		}
 	},
 }
