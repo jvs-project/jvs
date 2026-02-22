@@ -168,7 +168,7 @@ class JVSExtension {
     const items = snapshots.slice(0, 10).map((s) => ({
       label: `${s.shortId} - ${s.note || '(no note)'}`,
       description: `${s.tags.join(', ') || 'no tags'} - ${formatDate(s.createdAt)}`,
-      snapshotId: s.id
+      snapshotId: s.snapshotId
     }));
 
     const selected = await vscode.window.showQuickPick(items, {
@@ -479,7 +479,7 @@ class HistoryProvider implements vscode.TreeDataProvider<SnapshotTreeItem> {
 
   async getSnapshotInfos(): Promise<SnapshotInfo[]> {
     const items = await this.getSnapshots();
-    return items.map(item => ({
+    return items.map((item): SnapshotInfo => ({
       id: item.snapshotId,
       shortId: item.shortId,
       note: item.note,
