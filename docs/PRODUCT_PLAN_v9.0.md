@@ -1,290 +1,459 @@
-# JVS Product Plan v9.0 - The Adoption Release
+# JVS Product Plan v9.0 - The Integration Release
 
 **Version:** v9.0
 **Date:** 2026-02-23
-**Status:** Draft
-**Theme:** Reducing Friction to Adoption
+**Status:** Approved
+**Theme:** Enabling Tool Integration via Programmatic APIs
 
 ---
 
 ## Executive Summary
 
-### Strategic Thesis
+### Strategic Pivot (Post-Team Discussion)
 
-JVS v9.0 is **"The Adoption Release"** - a focused effort to reduce friction for users to discover, try, adopt, and integrate JVS into their existing workflows.
+**Original Thesis:** v9.0 = "Polish Release" (CLI UX, docs, examples)
 
-**Key Insight:** JVS's core feature set is complete. O(1) snapshots, restore, worktrees, tags, and verification solve the fundamental problem. What's missing is not functionality—it's **discoverability, integration patterns, and professional polish**.
+**Revised Thesis:** v9.0 = "Integration Release" (Python SDK, MLflow plugin, stable JSON API)
 
-### Three Pillars of v9.0
+### The Critical Insight
 
-| Pillar | Current State | v9.0 Goal |
-|--------|--------------|-----------|
-| **Discoverability** | Technical docs, unclear value prop | Clear positioning per user type, comparison guides |
-| **Integration Patterns** | Users figure it out alone | Script examples, templates, integration recipes |
-| **Developer Experience** | Functional CLI | Professional, polished, joyful to use |
-
-### What v9.0 Is NOT
-
-- ❌ No new core features (snapshot/restore/worktree are complete)
-- ❌ No scope expansion (no locking, merging, remotes—see CONSTITUTION.md)
-- ❌ No architecture changes
-- ❌ No breaking changes
-
----
-
-## Market Analysis (2025)
-
-### Target User Landscape
-
-#### Game Asset Management
-
-**Current Standards:**
-| Tool | Strength | Weakness |
-|------|----------|----------|
-| **Perforce** | Industry standard, TB-scale | Expensive, complex server |
-| **Unity Version Control** | Deep Unity integration | Vendor lock-in, cloud-only |
-| **Git + LFS** | Familiar to devs | Slow with >100GB repos, bandwidth costs |
-
-**Market Data:**
-> "Plastic SCM的锁机制专为大型二进制文件优化，确保多人协作时不会出现无法合并的冲突"
+> "The problem isn't that users don't know about JVS - it's that their **tools** can't integrate with it."
 >
-> Performance benchmarks show DVC is 77-82% faster than Git LFS for large datasets
+> — pm-ai-agent strategic feedback
 
-**JVS Positioning Opportunity:**
-> **"Perforce for the cloud-native era"** — Free, O(1) snapshots, no server to manage
+**Root Cause:** JVS has a CLI but no programmatic API. Production systems (agent platforms, CI/CD, ML pipelines) need APIs to call, not CLI commands to wrap with subprocess.
 
-#### AI Agent Sandboxes
+**Evidence from Market Research:**
 
-**Market Trends (2025):**
-> "Agent Infra 需求爆发...Environment 提供 Agent 开发和行动的容器"
+| Tool | Why It Won | API Story |
+|------|-----------|-----------|
+| **E2B** | 40K→15M/month growth | `from e2b import Sandbox` — one line import |
+| **MLflow** | De facto ML tracking | `mlflow.log_artifact()` — Python API |
+| **DVC** | ML data versioning | Python SDK + Python bindings |
 
-**Key Pain Points:**
-1. Environment fragmentation (multiple sandboxes require data copying)
-2. State management (millisecond env start/stop critical)
-3. Snapshot/restore for multi-stage reasoning
-
-**JVS Positioning Opportunity:**
-> **"Filesystem state layer for agents"** — O(1) snapshots complement container isolation
-
-#### Data ETL Pipelines
-
-**Current Options:**
-| Tool | Strength | Weakness |
-|------|----------|----------|
-| **DVC** | Powerful, ML-focused | Complex pipeline setup |
-| **Git LFS** | Simple | Doesn't scale to TB datasets |
-| **Delta/Iceberg** | Time travel queries | Database-level, not workspace |
-
-**JVS Positioning Opportunity:**
-> **"Simpler DVC"** — Snapshot-first without pipeline complexity
+JVS has **zero** programmatic integration story.
 
 ---
 
-## v9.0 Roadmap
+## Strategic Decision: Three Options
 
-### Phase 1: Discoverability (Weeks 1-3)
+| Option | Focus | Timeline | Trade-off |
+|--------|-------|----------|-----------|
+| **A** | Polish (CLI UX, docs, examples) | 12 weeks | Human users can adopt, tools cannot |
+| **B** | Integration Layer (SDK, plugins) | 12-16 weeks | Enables tool integration, less polish |
+| **C** | Both (extended timeline) | 18-20 weeks | Everything, slower to market |
 
-#### 1.1 Clear Value Proposition
+### Recommendation: Option B - Integration Release
 
-**Deliverables:**
+**Rationale:**
 
-1. **Homepage/README Overhaul**
-   ```markdown
-   # JVS: O(1) Workspace Snapshots for Large Files
+1. **Human users CAN use CLI today** - JVS is functional for humans
+2. **Tools CANNOT use JVS** - No API means no integration
+3. **Polish is visible, APIs are foundational** - Polish can wait, APIs unlock ecosystems
 
-   ## For Game Developers
-   Version 100GB+ assets instantly. No Git LFS, no bandwidth costs.
+**Counter-argument:** What if game studios (Option A's primary audience) don't need APIs because they integrate via build scripts?
 
-   ## For AI/ML Teams
-   Reproducible experiment environments. Snapshot and restore in seconds.
-
-   ## For Data Engineers
-   Dataset versioning at TB scale. O(1) snapshots via JuiceFS CoW.
-   ```
-
-2. **Comparison Guides**
-   - `docs/COMPARISON_PERFORCE.md` - JVS vs Perforce
-   - `docs/COMPARISON_DVC.md` - JVS vs DVC
-   - `docs/COMPARISON_GIT_LFS.md` - JVS vs Git LFS
-
-3. **"2-Minute to First Snapshot" Onboarding**
-   ```bash
-   # Install
-   go install github.com/jvs/jvs@latest
-
-   # Initialize (takes 5 seconds)
-   jvs init myproject
-   cd myproject/main
-
-   # First snapshot (takes <1 second for 100GB)
-   jvs snapshot "Initial state"
-
-   # Done. You're versioned.
-   ```
-
-#### 1.2 Scenario-Based Landing Pages
-
-Each target user gets a dedicated guide:
-
-| Document | Target | Content |
-|----------|--------|---------|
-| `docs/game_dev_quickstart.md` | Game Studios | Unity/Unreal workflows, asset versioning |
-| `docs/agent_sandbox_quickstart.md` | AI Labs | Agent experiment tracking, environment reset |
-| `docs/etl_pipeline_quickstart.md` | Data Teams | Dataset versioning, pipeline integration |
-
-**Success Criteria:**
-- User can understand "Is JVS for me?" in <30 seconds
-- User can complete first snapshot in <2 minutes
-- Clear comparison with incumbent tools
+**Decision point pending:** pm-game-etl input on game dev integration patterns.
 
 ---
 
-### Phase 2: Integration Patterns (Weeks 4-6)
+## v9.0 Roadmap (Option B: Integration Release)
 
-#### 2.1 Script Examples Repository
+### Phase 1: Stable JSON API Foundation (Weeks 1-2)
 
-**Deliverables:**
-
-1. **Game Dev Examples**
-   ```bash
-   examples/unity_build.sh
-   # Unity Editor build + snapshot before/after
-
-   examples/unreal_cook.sh
-   # Unreal asset cooking + versioning
-   ```
-
-2. **Agent Sandbox Examples**
-   ```python
-   examples/agent_runner.py
-   # Python script: Fork worktree, restore baseline, run agent, snapshot result
-
-   examples/parallel_experiments.sh
-   # Bash script: Run 100 parallel agent experiments
-   ```
-
-3. **ETL Pipeline Examples**
-   ```python
-   examples/airflow_operator.py
-   # Airflow operator: Snapshot after ETL stages
-
-   examples/prefect_task.py
-   # Prefect task: Dataset versioning
-   ```
-
-#### 2.2 `.jvsignore` Templates
+**Problem:** JVS has `--json` flag but no stable schema or documentation.
 
 **Deliverables:**
 
-```
-templates/
-├── unity.jvsignore
-├── unreal.jvsignore
-├── python-ml.jvsignore
-├── data-engineering.jvsignore
-└── godot.jvsignore
-```
+1. **Stable JSON Schema**
+   ```json
+   {
+     "$schema": "https://jvs.io/schema/v1",
+     "type": "object",
+     "properties": {
+       "version": "1.0",
+       "snapshots": {
+         "type": "array",
+         "items": { "$ref": "#/definitions/snapshot" }
+       }
+     }
+   }
+   ```
 
-**Installation:**
-```bash
-jvs init --template unity myproject
-# Creates .jvs/.jvsignore with Unity exclusions
-```
+2. **API Stability Guarantee**
+   - JSON format versioned separately from CLI
+   - Backward compatibility承诺 for v1.x
+   - Deprecation warnings before breaking changes
 
-#### 2.3 Container Integration Examples
-
-```yaml
-# examples/docker-compose.yml
-services:
-  agent:
-    image: my-agent
-    volumes:
-      - /mnt/juicefs/jvs-repo/main:/workspace
-    command: python agent.py
-```
+3. **JSON API Documentation**
+   - `docs/API_REFERENCE.md` - All JSON outputs documented
+   - `docs/SCHEMA_v1.json` - Official schema file
+   - Examples in multiple languages (Python, Go, JS)
 
 **Success Criteria:**
-- User can copy-paste an example and have it working in <5 minutes
-- All major scenarios (Game, Agent, ETL) covered
-- Templates cover 80% of exclusion needs
+- Third party can parse JVS JSON without breaking on minor releases
+- All commands with `--json` documented with response schema
 
 ---
 
-### Phase 3: Developer Experience (Weeks 7-10)
+### Phase 2: Python SDK (Weeks 3-7)
 
-#### 3.1 Colored Output
+**Problem:** Agent platforms and ML teams need Python APIs.
 
-```go
-// Color scheme
-Success:  green
-Warning:  yellow
-Error:    red
-Snapshot ID: cyan
-Tags:     blue
+**Deliverables:**
+
+1. **`pip install jvs` Package**
+
+```python
+# jvs/__init__.py
+from jvs import Workspace, Snapshot
+
+# Core API
+class Workspace:
+    def __init__(self, path: str):
+        """Initialize JVS workspace at path."""
+
+    def snapshot(self, note: str, tags: List[str] = None, path: str = None) -> Snapshot:
+        """Create snapshot. Returns Snapshot object."""
+
+    def restore(self, snapshot_id: str) -> None:
+        """Restore workspace to snapshot."""
+
+    def history(self, filters: dict = None) -> List[Snapshot]:
+        """Get snapshot history."""
+
+    @property
+    def current_snapshot(self) -> Snapshot:
+        """Get current HEAD snapshot."""
+
+class Snapshot:
+    def __init__(self, snapshot_id: str):
+        """Snapshot reference."""
+
+    @property
+    def id(self) -> str:
+        """Snapshot ID."""
+
+    @property
+    def note(self) -> str:
+        """Snapshot note."""
+
+    @property
+    def tags(self) -> List[str]:
+        """Snapshot tags."""
+
+    @property
+    def created_at(self) -> datetime:
+        """Snapshot timestamp."""
+
+# Context manager support
+from jvs import transaction
+
+with transaction(workspace, note="Before risky operation"):
+    # ... do work ...
+    # Automatically snapshots on success, rolls back on exception
+    pass
 ```
 
-**Requirements:**
-- Respect `NO_COLOR` environment variable
-- `--no-color` flag for explicit control
+2. **Implementation Approach**
 
-#### 3.2 Enhanced Error Messages
+**Option 1:** CLI wrapper via subprocess (faster, v9.0 feasible)
+**Option 2:** Native Go with Python bindings (better performance, more complex)
 
-**Before:**
-```
-Error: snapshot not found
-```
+**Recommendation:** Start with Option 1, plan Option 2 for v9.1
 
-**After:**
-```
-Error: snapshot 'abc12345' not found
+3. **Python SDK Documentation**
 
-Run 'jvs history' to see available snapshots.
-Did you mean 'abc12346' (dated 2026-02-22)?
-```
+```python
+# examples/sdk_basic.py
+from jvs import Workspace
 
-#### 3.3 Multi-Line Snapshot Notes
+ws = Workspace("/mnt/juicefs/agent-repo")
 
-**Use Case:** ML experiment tracking
+# Before running agent
+baseline = ws.snapshot("Before agent run")
 
-```bash
-jvs snapshot <<EOF
-ML Experiment: ResNet50 v3
-Dataset: ImageNet (subset: 100k images)
-Hyperparameters:
-  - Learning rate: 0.001
-  - Batch size: 256
-  - Epochs: 100
-Result: 92.3% accuracy
-EOF
-```
-
-#### 3.4 Help Text with Examples
-
-```bash
-$ jvs snapshot --help
-Create a snapshot of the current worktree.
-
-Examples:
-  # Basic snapshot with note
-  jvs snapshot "Before refactoring"
-
-  # Snapshot with tags
-  jvs snapshot "v1.0 release" --tag v1.0 --tag release
-
-  # Multi-line note (ML experiment tracking)
-  jvs snapshot <<EOF
-  Experiment: ResNet50
-  Accuracy: 92.3%
-  EOF
-
-  # Partial snapshot (specific directory)
-  jvs snapshot "Assets only" --path Assets/
+try:
+    result = agent.run()
+    ws.snapshot(f"Agent completed: {result}")
+except Exception as e:
+    ws.restore(baseline.id)
+    raise
 ```
 
 **Success Criteria:**
-- CLI feels professional and polished
-- Error messages guide users to solutions
-- Users can discover features via --help
+- `pip install jvs` works on Python 3.9+
+- Coverage for all core JVS operations (init, snapshot, restore, history)
+- Context manager for atomic operations
+
+---
+
+### Phase 3: MLflow Plugin (Weeks 8-10)
+
+**Problem:** ML teams use MLflow for experiment tracking. JVS needs to integrate.
+
+**Deliverables:**
+
+1. **`mlflow-jvs` Plugin**
+
+```python
+# mlflow_jvs/__init__.py
+import mlflow
+from jvs import Workspace
+
+def log_jvs_snapshot(workspace_path: str, note: str = None, tags: list = None):
+    """
+    Log current JVS workspace state as MLflow artifact.
+
+    Usage:
+        mlflow.log_jvs_snapshot("/mnt/juicefs/experiment", "v1.0")
+    """
+    ws = Workspace(workspace_path)
+    snapshot = ws.snapshot(note, tags)
+
+    # Log snapshot metadata to MLflow
+    mlflow.log_param("jvs_snapshot_id", snapshot.id)
+    mlflow.log_text(snapshot.to_dict(), "jvs_snapshot.json")
+
+    return snapshot.id
+
+def load_jvs_snapshot(snapshot_id: str, workspace_path: str):
+    """
+    Restore JVS workspace from snapshot ID logged in MLflow run.
+
+    Usage:
+        mlflow.load_jvs_snapshot("abc123", "/mnt/juicefs/experiment")
+    """
+    ws = Workspace(workspace_path)
+    ws.restore(snapshot_id)
+```
+
+2. **MLflow UI Integration**
+
+```
+MLflow Run UI shows:
+┌─────────────────────────────────────┐
+│ Parameters:                          │
+│   learning_rate: 0.001               │
+│   batch_size: 256                    │
+│   jvs_snapshot_id: abc12345          │  ← New!
+│                                      │
+│ Artifacts:                           │
+│   model.pkl                          │
+│   jvs_snapshot.json                  │  ← New!
+│   predictions.csv                    │
+└─────────────────────────────────────┘
+```
+
+**Success Criteria:**
+- `pip install mlflow-jvs` works
+- One-line `mlflow.log_jvs_snapshot()` API
+- Snapshot metadata visible in MLflow UI
+
+---
+
+### Phase 4: Agent Platform Examples (Weeks 11-12)
+
+**Problem:** Agent platforms need integration patterns.
+
+**Deliverables:**
+
+1. **LangChain Integration**
+
+```python
+# examples/langchain_jvs.py
+from langchain.agents import AgentExecutor
+from jvs import transaction
+
+class JVSToolCallback:
+    def on_agent_start(self, agent_input: dict):
+        self.baseline = self.ws.snapshot("Before agent")
+
+    def on_agent_end(self, agent_output: dict):
+        self.ws.snapshot(f"After agent: {agent_output}")
+
+# Usage
+executor = AgentExecutor(
+    agent=agent,
+    tools=tools,
+    callbacks=[JVSToolCallback(workspace="/mnt/juicefs/agent")]
+)
+```
+
+2. **AutoGen Integration**
+
+```python
+# examples/autogen_jvs.py
+from autogen import AssistantAgent
+from jvs import Workspace
+
+ws = Workspace("/mnt/juicefs/autogen-exp")
+
+with transaction(ws, note="AutoGen conversation"):
+    assistant = AssistantAgent(
+        name="assistant",
+        workspace=ws  # AutoGen uses JVS for state
+    )
+    assistant.run(task)
+```
+
+3. **Parallel Agent Runner**
+
+```python
+# examples/parallel_agents.py
+from jvs import Workspace
+from concurrent.futures import ThreadPoolExecutor
+
+ws = Workspace("/mnt/juicefs/agent-baseline")
+
+def run_agent_experiment(seed: int):
+    # Fork worktree for this run
+    exp_ws = ws.fork(f"experiment-{seed}")
+
+    # Restore to baseline
+    exp_ws.restore("baseline")
+
+    # Run agent
+    result = agent.run(seed=seed)
+
+    # Snapshot result
+    exp_ws.snapshot(f"Seed {seed}: {result}")
+
+    return result
+
+with ThreadPoolExecutor(max_workers=100) as executor:
+    results = executor.map(run_agent_experiment, range(100))
+```
+
+**Success Criteria:**
+- 3+ agent framework integration examples
+- Copy-pasteable patterns for common workflows
+
+---
+
+## Implementation Details
+
+### Python SDK Design
+
+**Architecture Decision: CLI Wrapper vs Native Bindings**
+
+| Approach | Pros | Cons | Verdict |
+|----------|------|------|---------|
+| **CLI wrapper** | Fast to implement, stable | Slower, subprocess overhead | ✅ v9.0 |
+| **Go bindings** | Fast, direct API access | Complex build, cgo overhead | ⏳ v9.1 |
+| **gRPC server** | Language agnostic | Separate process, complexity | ❌ Reject |
+
+**v9.0 Implementation (CLI Wrapper):**
+
+```python
+# jvs/_cli.py
+import subprocess
+import json
+from typing import List, Optional, Dict, Any
+
+class JVSError(Exception):
+    """JVS CLI error."""
+
+class Workspace:
+    def __init__(self, path: str):
+        self.path = path
+        self._check_workspace()
+
+    def snapshot(self, note: str, tags: List[str] = None,
+                 path: str = None) -> "Snapshot":
+        cmd = ["jvs", "snapshot", note, "--json"]
+        if tags:
+            cmd.extend([f"--tag={t}" for t in tags])
+        if path:
+            cmd.extend(["--path", path])
+
+        result = self._run(cmd, cwd=self.path)
+        return Snapshot.from_dict(result)
+
+    def _run(self, cmd: List[str], cwd: str = None) -> Dict[str, Any]:
+        """Run JVS CLI and return parsed JSON output."""
+        result = subprocess.run(
+            cmd,
+            cwd=cwd or self.path,
+            capture_output=True,
+            text=True
+        )
+
+        if result.returncode != 0:
+            raise JVSError(result.stderr)
+
+        return json.loads(result.stdout)
+```
+
+### MLflow Plugin Design
+
+```python
+# mlflow_jvs/plugin.py
+import mlflow
+from mlflow import pyfunc
+from jvs import Workspace
+
+class JVSArtifact(mlflow.pyfunc.PythonModel):
+    """MLflow Python model wrapper for JVS snapshots."""
+
+    def __init__(self, workspace_path: str, snapshot_id: str):
+        self.workspace_path = workspace_path
+        self.snapshot_id = snapshot_id
+
+    def load_context(self, context):
+        """Restore JVS snapshot when loading model."""
+        ws = Workspace(self.workspace_path)
+        ws.restore(self.snapshot_id)
+
+@staticmethod
+def log_jvs_snapshot(workspace_path: str, note: str = None,
+                     artifact_path: str = "jvs_snapshot"):
+    """
+    Log JVS snapshot as MLflow artifact.
+
+    This enables:
+    1. Reproducible model loading (snapshot restored with model)
+    2. Experiment tracking (workspace state captured)
+    3. Model versioning (data + code + environment)
+    """
+    ws = Workspace(workspace_path)
+    snapshot = ws.snapshot(note or "MLflow snapshot")
+
+    # Log snapshot metadata
+    mlflow.log_params({
+        "jvs_snapshot_id": snapshot.id,
+        "jvs_snapshot_note": snapshot.note,
+        "jvs_snapshot_tags": ",".join(snapshot.tags or [])
+    })
+
+    # Create artifact wrapper
+    artifact = JVSArtifact(workspace_path, snapshot.id)
+    mlflow.pyfunc.log_model(artifact_path, python_model=artifact)
+
+    return snapshot.id
+```
+
+---
+
+## Updated Success Metrics
+
+### Integration Metrics (New)
+
+| Metric | Target | How to Measure |
+|--------|--------|----------------|
+| Python SDK installs | 500+ | PyPI downloads |
+| MLflow plugin installs | 100+ | PyPI downloads |
+| External integrations | 3+ | GitHub stars, forks |
+| LangChain example usage | TBD | GitHub traffic |
+| Agent platform adoption | 2+ | Direct outreach |
+
+### Developer Metrics
+
+| Metric | Target | How to Measure |
+|--------|--------|----------------|
+| Time to first integration | <10 min | SDK onboarding |
+| API documentation coverage | 100% | Docs review |
+| SDK test coverage | 80%+ | Code coverage |
 
 ---
 
@@ -294,113 +463,79 @@ Examples:
 
 | Feature | Why Not | Alternative |
 |---------|---------|-------------|
-| **File locking** | Requires distributed coordination | Use Perforce for collaboration |
-| **Merge support** | Binary files can't be merged | Use worktree forks |
-| **Remote protocol** | JuiceFS handles transport | Use `juicefs sync` |
-| **Built-in scheduling** | Airflow/Prefect exist | Provide examples |
-| **Web UI** | Massive complexity | Better CLI UX |
+| **CLI Polish** (colors, rich errors) | Deferring to v9.1 | CLI is functional for humans |
+| **Web UI** | Massive complexity | SDK enables others to build |
 | **Container orchestration** | K8s/Docker handle this | Provide examples |
-
-### KISS Principle Checklist
-
-Before adding ANY feature, ask:
-
-1. ✅ Does this solve a real problem for target users?
-2. ✅ Is there an existing tool? → Document integration instead
-3. ✅ Can this be a shell script? → Create example instead
-4. ✅ Does this add significant complexity? → Reject
-5. ✅ Would this break existing behavior? → Defer to major version
+| **File locking** | Distributed coordination | External coordination |
+| **Merge support** | Binary files can't merge | Worktree forks |
+| **Remote protocol** | JuiceFS handles transport | `juicefs sync` |
 
 ---
 
-## Implementation Timeline
+## Open Questions
 
-| Week | Focus | Deliverables |
-|------|-------|--------------|
-| 1-3 | Discoverability | README, comparison guides, quickstarts |
-| 4-6 | Integration Patterns | Script examples, templates, container examples |
-| 7-10 | Developer Experience | Colors, errors, multi-line notes, help examples |
-| 11-12 | Testing & Polish | Documentation review, test coverage, release prep |
+### Q1: Game Dev Integration Pattern
 
----
+**Question:** Do game studios need programmatic JVS APIs?
 
-## Success Metrics
+**Context:**
+- Game engines have build pipelines (Unity Editor, Unreal Build Tool)
+- Integration could be CLI calls in build scripts
+- OR could be native C#/C++ APIs
 
-### Adoption Metrics
+**Waiting on:** pm-game-etl analysis of game dev integration patterns
 
-| Metric | Current | Target (v9.0) | How to Measure |
-|--------|---------|---------------|----------------|
-| GitHub stars | TBD | 500+ | GitHub API |
-| Active users | TBD | 100+ | Homebrew installs |
-| Game studio adoption | 0 | 3+ | Case studies |
-| Agent platform adoption | 0 | 2+ | Integrations |
-| Data team adoption | 0 | 5+ | Blog posts |
+### Q2: SDK Performance
 
-### Quality Metrics
+**Question:** Is CLI wrapper performance acceptable?
 
-| Metric | Target | How to Measure |
-|--------|--------|----------------|
-| Time to first snapshot | <2 min | User testing |
-| Documentation coverage | 100% | Docs review |
-| CLI help clarity | <5 sec to understand | User testing |
-| Example script coverage | 3 scenarios × 3 examples | Code review |
+**Considerations:**
+- Subprocess overhead ~10-50ms per call
+- Snapshot operations are O(1) but still take time
+- For 1000s of parallel agents, overhead matters
 
----
+**Decision point:** Benchmark CLI wrapper vs native bindings in Phase 2
 
-## Positioning Statements
+### Q3: API Stability Timeline
 
-### For Game Developers
-> **"Stop paying for Perforce. JVS gives you instant snapshots of 100GB+ assets—for free. No server, no bandwidth costs, no Git LFS pain."**
+**Question:** How long to guarantee JSON API stability?
 
-### For AI/ML Teams
-> **"Reproducible agent experiments in seconds. Snapshot, run, restore—repeat. JVS provides O(1) filesystem versioning that complements your container stack."**
+**Options:**
+- v1.x stable guarantee (12+ months)
+- v9.0-v9.5 stable (6 months)
+- Per-version stability with deprecation warnings
 
-### For Data Engineers
-> **"Dataset versioning without the complexity. JVS is simpler than DVC, faster than Git LFS, and scales to TB datasets via JuiceFS."**
+**Recommendation:** v1.x stable guarantee to enable ecosystem confidence
 
 ---
 
-## Go-to-Market Strategy
+## Revised Positioning Statements
 
-### Content Marketing
+### For AI/ML Engineers (Primary Audience)
+> **"JVS Python SDK: O(1) workspace snapshots in three lines of code. Integrate with MLflow, LangChain, and your agent framework."**
 
-1. **Technical Blog Posts**
-   - "Why Git LFS Fails at 100GB"
-   - "JVS vs Perforce: A Performance Comparison"
-   - "Reproducible ML Experiments with O(1) Snapshots"
+### For Game Developers (Secondary)
+> **"JVS: Instant snapshots of 100GB+ assets. CLI for build pipelines, no server needed."**
 
-2. **Example Showcases**
-   - Video: 2-minute Unity project setup
-   - Video: Running 100 parallel agent experiments
-   - Tutorial: Airflow + JVS for data pipelines
-
-3. **Community Engagement**
-   - Reddit: r/gamedev, r/MachineLearning
-   - Hacker News: Launch v9.0 announcement
-   - conferences: Talk proposals for GDC, PyData
-
-### Distribution Channels
-
-| Channel | Tactic |
-|---------|--------|
-| **Homebrew** | One-line install for macOS |
-| **Scoop** | Windows package |
-| **Docker Hub** | `jvs/jvs` image with JuiceFS preconfigured |
-| **APT/RPM** | Packages for Debian/RHEL |
+### For Data Engineers (Tertiary)
+> **"JVS + MLflow: Dataset versioning without DVC complexity. Log snapshots alongside your experiments."**
 
 ---
 
 ## Conclusion
 
-### The v9.0 Promise
+### The v9.0 Promise (Revised)
 
-> **"JVS v9.0 makes it trivially easy to adopt workspace versioning for large files. In 2 minutes, you're versioned. In 5 minutes, you're integrated. It just works."**
+> **"JVS v9.0 enables programmatic workspace versioning. Import the SDK, call snapshot(), integrate with your tools."**
 
-### Design Philosophy Reminder
+### Strategic Rationale
 
-"Perfection is achieved not when there is nothing more to add, but when there is nothing left to take away." — Antoine de Saint-Exupéry
+**Polish is visible, APIs are foundational.**
 
-JVS v9.0 embraces this philosophy. The core is complete. Now we polish the experience.
+- A polished CLI makes humans happy
+- A stable API unlocks entire ecosystems
+
+JVS's CLI is functional. The gap is integration. v9.0 closes that gap.
 
 ---
 
