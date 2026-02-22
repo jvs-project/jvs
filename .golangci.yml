@@ -1,0 +1,38 @@
+run:
+  timeout: 5m
+  tests: false
+
+linters:
+  enable:
+    - gofmt
+    - govet
+    - staticcheck
+    - unused
+    - varcheck
+    - ineffassign
+    - deadcode
+    - gocyclo
+    - dupl
+    - gosec
+    - misspell
+    - gocritic
+  disable:
+    - errcheck  # Too noisy for now
+    - goconst  # We prefer explicit constants
+
+linters-settings:
+  gosec:
+    excludes:
+      - G104  # Errors unhandled - we handle these differently
+  gocyclo:
+    min-complexity: 15
+
+issues:
+  exclude-rules:
+    - G104  # Exclude unhandled errors from gosec
+  max-issues-per-linter: 0
+  max-same-issues: 0
+
+output:
+  format: colored-line-number
+  print-issued-lines: true

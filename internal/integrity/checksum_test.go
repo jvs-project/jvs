@@ -91,3 +91,93 @@ func TestComputeDescriptorChecksum_WithTags(t *testing.T) {
 	hash2, _ := integrity.ComputeDescriptorChecksum(desc2)
 	assert.NotEqual(t, hash1, hash2, "different tags must produce different checksum")
 }
+
+func TestComputeDescriptorChecksum_WithParentID(t *testing.T) {
+	desc := &model.Descriptor{
+		SnapshotID:   "1708300800000-a3f7c1b2",
+		WorktreeName: "main",
+		ParentID:     func() *model.SnapshotID { id := model.SnapshotID("parent-id"); return &id }(),
+	}
+
+	hash, err := integrity.ComputeDescriptorChecksum(desc)
+	require.NoError(t, err)
+	assert.NotEmpty(t, hash)
+}
+
+func TestComputeDescriptorChecksum_WithNote(t *testing.T) {
+	desc := &model.Descriptor{
+		SnapshotID:   "1708300800000-a3f7c1b2",
+		WorktreeName: "main",
+		Note:         "This is a test snapshot with important information",
+	}
+
+	hash, err := integrity.ComputeDescriptorChecksum(desc)
+	require.NoError(t, err)
+	assert.NotEmpty(t, hash)
+}
+
+func TestComputeDescriptorChecksum_WithAllFields(t *testing.T) {
+	// Test checksum with all fields populated
+	parentID := model.SnapshotID("parent-snapshot-id")
+	desc := &model.Descriptor{
+		SnapshotID:      "1708300800000-a3f7c1b2",
+		ParentID:        &parentID,
+		WorktreeName:    "main",
+		CreatedAt:       time.Date(2024, 2, 19, 12, 30, 45, 0, time.UTC),
+		Note:            "Test snapshot with all fields",
+		Tags:            []string{"v1.0", "release", "stable"},
+		Engine:          model.EngineCopy,
+		PayloadRootHash: "abc123def456",
+	}
+
+	hash, err := integrity.ComputeDescriptorChecksum(desc)
+	require.NoError(t, err)
+	assert.NotEmpty(t, hash)
+	assert.Len(t, hash, 64) // SHA-256 hex encoded
+}
+
+func TestComputeDescriptorChecksum_EmptyFields(t *testing.T) {
+	// Test checksum with minimal fields
+	desc := &model.Descriptor{
+		SnapshotID:   "1708300800000-a3f7c1b2",
+		WorktreeName:  "main",
+		Note:         "",
+		Tags:         []string{},
+	}
+
+	hash, err := integrity.ComputeDescriptorChecksum(desc)
+	require.NoError(t, err)
+	assert.NotEmpty(t, hash)
+}
+
+func TestComputeDescriptorChecksum_NilParentID(t *testing.T) {
+	// Test checksum with nil parent ID
+	desc := &model.Descriptor{
+		SnapshotID:   "1708300800000-a3f7c1b2",
+		WorktreeName: "main",
+		ParentID:     nil,
+	}
+
+	hash, err := integrity.ComputeDescriptorChecksum(desc)
+	require.NoError(t, err)
+	assert.NotEmpty(t, hash)
+}
+
+func TestComputeDescriptorChecksum_DifferentEngineTypes(t *testing.T) {
+	// Test that different engine types produce different checksums
+	desc1 := &model.Descriptor{
+		SnapshotID:   "1708300800000-a3f7c1b2",
+		WorktreeName: "main",
+		Engine:       model.EngineCopy,
+	}
+	desc2 := &model.Descriptor{
+		SnapshotID:   "1708300800000-a3f7c1b2",
+		WorktreeName: "main",
+		Engine:       model.EngineReflinkCopy,
+	}
+
+	hash1, _ := integrity.ComputeDescriptorChecksum(desc1)
+	hash2, _ := integrity.ComputeDescriptorChecksum(desc2)
+
+	assert.NotEqual(t, hash1, hash2, "different engine types should produce different checksums")
+}

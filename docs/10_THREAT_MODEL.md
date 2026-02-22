@@ -1,4 +1,4 @@
-# Threat Model (v6.3)
+# Threat Model (v7.0)
 
 ## Assets
 - snapshot payloads
@@ -9,11 +9,11 @@
 ## Adversary assumptions
 - can read and write files in repository path with compromised local account
 - cannot break strong cryptography
-- can race operations and attempt stale-lock writes
+- can attempt concurrent write operations
 
 ## Key threats and controls
-1. Stale writer continues after lock steal
-   Control: fencing token validation before commit.
+1. Concurrent writes causing data races
+   Control: JVS v7.0 relies on filesystem-level mutual exclusion; users are responsible for coordinating concurrent access.
 2. Descriptor and checksum both rewritten
    Control: descriptor checksum + payload root hash detect independent tampering. Coordinated rewrite is a v0.x accepted risk (see 09_SECURITY_MODEL.md).
 3. Path traversal on worktree operations

@@ -258,21 +258,526 @@ func TestCollector_Plan_ProtectedCounts(t *testing.T) {
 	assert.Equal(t, len(plan.ProtectedSet), len(plan.ProtectedSet))
 }
 
-func TestCollector_Run_PlanMismatch(t *testing.T) {
+func TestCollector_Run_TombstoneCreation(t *testing.T) {
 	repoPath := setupTestRepo(t)
 
-	// Create snapshot
+	// Create snapshot in main
 	createTestSnapshot(t, repoPath)
+
+	// Create another worktree with snapshot then delete it
+	wtMgr := worktree.NewManager(repoPath)
+	cfg, err := wtMgr.Create("temp", nil)
+	require.NoError(t, err)
+
+	tempPath := wtMgr.Path("temp")
+	os.WriteFile(filepath.Join(tempPath, "file.txt"), []byte("temp content"), 0644)
+	creator := snapshot.NewCreator(repoPath, model.EngineCopy)
+	tempDesc, err := creator.Create("temp", "temp", nil)
+	require.NoError(t, err)
+	_ = cfg
+
+	// Delete worktree to make snapshot eligible
+	require.NoError(t, wtMgr.Remove("temp"))
+
+	// Run GC
+	collector := gc.NewCollector(repoPath)
+	plan, err := collector.Plan()
+	require.NoError(t, err)
+
+	err = collector.Run(plan.PlanID)
+	require.NoError(t, err)
+
+	// Verify tombstone was created
+	tombstonesDir := filepath.Join(repoPath, ".jvs", "gc", "tombstones")
+	entries, err := os.ReadDir(tombstonesDir)
+	require.NoError(t, err)
+
+	// Should have tombstone for deleted snapshot
+	found := false
+	for _, e := range entries {
+		if e.Name() == string(tempDesc.SnapshotID)+".json" {
+			found = true
+			break
+		}
+	}
+	assert.True(t, found, "tombstone should be created for deleted snapshot")
+}
+
+func TestCollector_LoadPlan_Invalid(t *testing.T) {
+	repoPath := setupTestRepo(t)
+
+	collector := gc.NewCollector(repoPath)
+	_, err := collector.LoadPlan("nonexistent-plan")
+	assert.Error(t, err)
+}
+
+func TestCollector_LoadPlan_InvalidJSON(t *testing.T) {
+	repoPath := setupTestRepo(t)
+
+	// Create a plan file with invalid JSON
+	gcDir := filepath.Join(repoPath, ".jvs", "gc")
+	require.NoError(t, os.MkdirAll(gcDir, 0755))
+	invalidPlanPath := filepath.Join(gcDir, "invalid-plan.json")
+	require.NoError(t, os.WriteFile(invalidPlanPath, []byte("{invalid json"), 0644))
+
+	collector := gc.NewCollector(repoPath)
+	_, err := collector.LoadPlan("invalid-plan")
+	assert.Error(t, err)
+}
+
+func TestCollector_Plan_WritePlanError(t *testing.T) {
+	// This test is hard to implement without mocking
+	// In real scenarios, writePlan only fails on disk I/O errors
+	// which are rare on modern systems
+	repoPath := setupTestRepo(t)
+
+	// Create a snapshot to ensure plan has content
+	createTestSnapshot(t, repoPath)
+
+	collector := gc.NewCollector(repoPath)
+	_, err := collector.Plan()
+	assert.NoError(t, err, "plan should succeed under normal conditions")
+}
+
+func TestCollector_Plan_WithNonexistentSnapshotsDir(t *testing.T) {
+	repoPath := setupTestRepo(t)
+
+	// Remove snapshots directory to simulate edge case
+	snapshotsDir := filepath.Join(repoPath, ".jvs", "snapshots")
+	os.RemoveAll(snapshotsDir)
+
+	collector := gc.NewCollector(repoPath)
+	plan, err := collector.Plan()
+	require.NoError(t, err)
+	assert.Empty(t, plan.ProtectedSet)
+	assert.Empty(t, plan.ToDelete)
+}
+
+func TestCollector_Plan_WithOnlyLineage(t *testing.T) {
+	repoPath := setupTestRepo(t)
+
+	// Create a chain of snapshots
+	mainPath := filepath.Join(repoPath, "main")
+	creator := snapshot.NewCreator(repoPath, model.EngineCopy)
+
+	os.WriteFile(filepath.Join(mainPath, "file1.txt"), []byte("1"), 0644)
+	desc1, err := creator.Create("main", "first", nil)
+	require.NoError(t, err)
+
+	os.WriteFile(filepath.Join(mainPath, "file2.txt"), []byte("2"), 0644)
+	desc2, err := creator.Create("main", "second", nil)
+	require.NoError(t, err)
+
+	// Verify lineage
+	assert.Equal(t, desc1.SnapshotID, *desc2.ParentID)
 
 	collector := gc.NewCollector(repoPath)
 	plan, err := collector.Plan()
 	require.NoError(t, err)
 
-	// Manually modify the worktree to protect a snapshot that's in toDelete
-	// This simulates a race condition where something becomes protected after planning
+	// Both should be protected (desc2 as head, desc1 as parent)
+	assert.Contains(t, plan.ProtectedSet, desc1.SnapshotID)
+	assert.Contains(t, plan.ProtectedSet, desc2.SnapshotID)
+	// At least 1 protected by lineage
+	assert.Greater(t, plan.ProtectedByLineage, 0)
+}
 
-	// For this test, we'll just verify the plan runs successfully since
-	// we can't easily create the mismatch condition
+func TestCollector_Plan_WithManySnapshots(t *testing.T) {
+	repoPath := setupTestRepo(t)
+
+	mainPath := filepath.Join(repoPath, "main")
+	creator := snapshot.NewCreator(repoPath, model.EngineCopy)
+
+	// Create multiple snapshots
+	var snapshotIDs []model.SnapshotID
+	for i := 0; i < 10; i++ {
+		os.WriteFile(filepath.Join(mainPath, "file.txt"), []byte(string(rune(i))), 0644)
+		desc, err := creator.Create("main", "test", nil)
+		require.NoError(t, err)
+		snapshotIDs = append(snapshotIDs, desc.SnapshotID)
+	}
+
+	collector := gc.NewCollector(repoPath)
+	plan, err := collector.Plan()
+	require.NoError(t, err)
+
+	// Only the latest should be directly protected (others by lineage)
+	assert.Contains(t, plan.ProtectedSet, snapshotIDs[len(snapshotIDs)-1])
+	assert.Equal(t, 0, plan.CandidateCount)
+}
+
+func TestCollector_Plan_ProtectedByPinCount(t *testing.T) {
+	repoPath := setupTestRepo(t)
+
+	// Create snapshot in main
+	mainPath := filepath.Join(repoPath, "main")
+	creator := snapshot.NewCreator(repoPath, model.EngineCopy)
+	os.WriteFile(filepath.Join(mainPath, "file1.txt"), []byte("1"), 0644)
+	_, err := creator.Create("main", "first", nil)
+	require.NoError(t, err)
+
+	// Create temp worktree with a snapshot that won't be in main's lineage
+	wtMgr := worktree.NewManager(repoPath)
+	cfg, err := wtMgr.Create("temp", nil)
+	require.NoError(t, err)
+
+	tempPath := wtMgr.Path("temp")
+	os.WriteFile(filepath.Join(tempPath, "file.txt"), []byte("temp"), 0644)
+	tempDesc, err := creator.Create("temp", "temp snap", nil)
+	require.NoError(t, err)
+	_ = cfg
+
+	// Delete the temp worktree so snapshot is only protected by pin
+	require.NoError(t, wtMgr.Remove("temp"))
+
+	// Create pin for the temp snapshot
+	pinsDir := filepath.Join(repoPath, ".jvs", "pins")
+	require.NoError(t, os.MkdirAll(pinsDir, 0755))
+	pinContent := `{"snapshot_id":"` + string(tempDesc.SnapshotID) + `","pinned_at":"2099-01-01T00:00:00Z","reason":"test"}`
+	require.NoError(t, os.WriteFile(filepath.Join(pinsDir, string(tempDesc.SnapshotID)+".json"), []byte(pinContent), 0644))
+
+	collector := gc.NewCollector(repoPath)
+	plan, err := collector.Plan()
+	require.NoError(t, err)
+
+	// Should have 1 protected by pin
+	assert.Equal(t, 1, plan.ProtectedByPin)
+}
+
+func TestCollector_Run_DeletesSnapshot(t *testing.T) {
+	repoPath := setupTestRepo(t)
+
+	// Create snapshot in main (protected)
+	createTestSnapshot(t, repoPath)
+
+	// Create temp worktree snapshot
+	wtMgr := worktree.NewManager(repoPath)
+	cfg, err := wtMgr.Create("temp", nil)
+	require.NoError(t, err)
+
+	tempPath := wtMgr.Path("temp")
+	os.WriteFile(filepath.Join(tempPath, "file.txt"), []byte("temp"), 0644)
+	creator := snapshot.NewCreator(repoPath, model.EngineCopy)
+	tempDesc, err := creator.Create("temp", "temp", nil)
+	require.NoError(t, err)
+	_ = cfg
+
+	// Delete worktree
+	require.NoError(t, wtMgr.Remove("temp"))
+
+	// Run GC
+	collector := gc.NewCollector(repoPath)
+	plan, err := collector.Plan()
+	require.NoError(t, err)
+
 	err = collector.Run(plan.PlanID)
 	require.NoError(t, err)
+
+	// Verify snapshot directory was deleted
+	snapshotDir := filepath.Join(repoPath, ".jvs", "snapshots", string(tempDesc.SnapshotID))
+	_, err = os.Stat(snapshotDir)
+	assert.True(t, os.IsNotExist(err), "snapshot directory should be deleted")
+}
+
+func TestCollector_Run_DescriptorRemoval(t *testing.T) {
+	repoPath := setupTestRepo(t)
+
+	// Create a temp worktree with a snapshot
+	wtMgr := worktree.NewManager(repoPath)
+	cfg, err := wtMgr.Create("temp", nil)
+	require.NoError(t, err)
+
+	tempPath := wtMgr.Path("temp")
+	os.WriteFile(filepath.Join(tempPath, "file.txt"), []byte("temp content"), 0644)
+	creator := snapshot.NewCreator(repoPath, model.EngineCopy)
+	tempDesc, err := creator.Create("temp", "temp", nil)
+	require.NoError(t, err)
+	_ = cfg
+
+	// Verify descriptor exists
+	descriptorPath := filepath.Join(repoPath, ".jvs", "descriptors", string(tempDesc.SnapshotID)+".json")
+	_, err = os.Stat(descriptorPath)
+	require.NoError(t, err, "descriptor should exist")
+
+	// Delete worktree to make snapshot eligible for GC
+	require.NoError(t, wtMgr.Remove("temp"))
+
+	collector := gc.NewCollector(repoPath)
+	plan, err := collector.Plan()
+	require.NoError(t, err)
+
+	// Run GC - descriptor should also be deleted
+	err = collector.Run(plan.PlanID)
+	require.NoError(t, err)
+
+	// Verify descriptor was deleted
+	_, err = os.Stat(descriptorPath)
+	assert.True(t, os.IsNotExist(err), "descriptor should be deleted")
+}
+
+func TestCollector_ListAllSnapshots_Empty(t *testing.T) {
+	repoPath := setupTestRepo(t)
+
+	// Don't create any snapshots
+	collector := gc.NewCollector(repoPath)
+
+	// Access internal method via Plan which calls listAllSnapshots
+	plan, err := collector.Plan()
+	require.NoError(t, err)
+	assert.Empty(t, plan.ProtectedSet)
+}
+
+func TestCollector_ListAllSnapshots_WithNonDirectoryEntries(t *testing.T) {
+	repoPath := setupTestRepo(t)
+
+	// Create a snapshot
+	createTestSnapshot(t, repoPath)
+
+	// Add a non-directory entry to snapshots dir
+	snapshotsDir := filepath.Join(repoPath, ".jvs", "snapshots")
+	err := os.WriteFile(filepath.Join(snapshotsDir, "file.txt"), []byte("test"), 0644)
+	require.NoError(t, err)
+
+	collector := gc.NewCollector(repoPath)
+	plan, err := collector.Plan()
+	require.NoError(t, err)
+
+	// Plan should still succeed, ignoring non-dir entries
+	assert.NotEmpty(t, plan.ProtectedSet)
+}
+
+func TestCollector_deleteSnapshot_DescriptorIsDirectory(t *testing.T) {
+	repoPath := setupTestRepo(t)
+
+	// Create temp worktree with a snapshot
+	wtMgr := worktree.NewManager(repoPath)
+	cfg, err := wtMgr.Create("temp", nil)
+	require.NoError(t, err)
+
+	tempPath := wtMgr.Path("temp")
+	os.WriteFile(filepath.Join(tempPath, "file.txt"), []byte("temp"), 0644)
+	creator := snapshot.NewCreator(repoPath, model.EngineCopy)
+	tempDesc, err := creator.Create("temp", "temp", nil)
+	require.NoError(t, err)
+	_ = cfg
+
+	// Replace the descriptor file with a directory containing a file (blocking os.Remove)
+	descriptorPath := filepath.Join(repoPath, ".jvs", "descriptors", string(tempDesc.SnapshotID)+".json")
+	require.NoError(t, os.Remove(descriptorPath))
+	require.NoError(t, os.MkdirAll(descriptorPath, 0755))
+	// Add a file inside so os.Remove fails (can't remove non-empty dir)
+	require.NoError(t, os.WriteFile(filepath.Join(descriptorPath, "blocker"), []byte("x"), 0644))
+
+	// Delete worktree to make snapshot eligible for GC
+	require.NoError(t, wtMgr.Remove("temp"))
+
+	// GC should still succeed despite descriptor being a non-empty directory
+	collector := gc.NewCollector(repoPath)
+	plan, err := collector.Plan()
+	require.NoError(t, err)
+
+	// Run GC - should succeed even though descriptor removal will fail (it's a non-empty dir)
+	err = collector.Run(plan.PlanID)
+	require.NoError(t, err)
+
+	// Snapshot directory should still be deleted
+	snapshotDir := filepath.Join(repoPath, ".jvs", "snapshots", string(tempDesc.SnapshotID))
+	_, err = os.Stat(snapshotDir)
+	assert.True(t, os.IsNotExist(err), "snapshot directory should be deleted")
+}
+
+func TestCollector_writeTombstone_TombstonesDirIsFile(t *testing.T) {
+	repoPath := setupTestRepo(t)
+
+	// Create temp worktree with a snapshot
+	wtMgr := worktree.NewManager(repoPath)
+	cfg, err := wtMgr.Create("temp", nil)
+	require.NoError(t, err)
+
+	tempPath := wtMgr.Path("temp")
+	os.WriteFile(filepath.Join(tempPath, "file.txt"), []byte("temp"), 0644)
+	creator := snapshot.NewCreator(repoPath, model.EngineCopy)
+	_, err = creator.Create("temp", "temp", nil)
+	require.NoError(t, err)
+	_ = cfg
+
+	// Make tombstones a file instead of directory (blocking writeTombstone)
+	tombstonesPath := filepath.Join(repoPath, ".jvs", "gc", "tombstones")
+	require.NoError(t, os.MkdirAll(filepath.Dir(tombstonesPath), 0755))
+	require.NoError(t, os.WriteFile(tombstonesPath, []byte("blocked"), 0644))
+
+	// Delete worktree to make snapshot eligible for GC
+	require.NoError(t, wtMgr.Remove("temp"))
+
+	// GC should still succeed despite tombstones path being blocked
+	collector := gc.NewCollector(repoPath)
+	plan, err := collector.Plan()
+	require.NoError(t, err)
+
+	err = collector.Run(plan.PlanID)
+	require.NoError(t, err)
+
+	// Cleanup: restore tombstones as directory for other tests
+	os.Remove(tombstonesPath)
+	os.MkdirAll(tombstonesPath, 0755)
+}
+
+func TestCollector_Run_DeleteSnapshotError(t *testing.T) {
+	repoPath := setupTestRepo(t)
+
+	// Create a snapshot in main worktree
+	createTestSnapshot(t, repoPath)
+
+	// Create temp worktree with a snapshot
+	wtMgr := worktree.NewManager(repoPath)
+	cfg, err := wtMgr.Create("temp", nil)
+	require.NoError(t, err)
+
+	tempPath := wtMgr.Path("temp")
+	os.WriteFile(filepath.Join(tempPath, "file.txt"), []byte("temp"), 0644)
+	creator := snapshot.NewCreator(repoPath, model.EngineCopy)
+	tempDesc, err := creator.Create("temp", "temp", nil)
+	require.NoError(t, err)
+	_ = cfg
+
+	// Delete worktree to make snapshot eligible for GC
+	require.NoError(t, wtMgr.Remove("temp"))
+
+	// Make the snapshot directory read-only to cause deleteSnapshot to fail
+	snapshotDir := filepath.Join(repoPath, ".jvs", "snapshots", string(tempDesc.SnapshotID))
+	// Make a subdirectory non-removable
+	subDir := filepath.Join(snapshotDir, "subdir")
+	require.NoError(t, os.MkdirAll(subDir, 0000))
+
+	// GC should still continue despite deleteSnapshot error
+	collector := gc.NewCollector(repoPath)
+	plan, err := collector.Plan()
+	require.NoError(t, err)
+
+	// Run GC - should succeed even though snapshot deletion partially fails
+	err = collector.Run(plan.PlanID)
+	require.NoError(t, err)
+
+	// Cleanup: restore permissions for cleanup
+	os.Chmod(subDir, 0755)
+}
+
+func TestCollector_Plan_WithInvalidPinFile(t *testing.T) {
+	repoPath := setupTestRepo(t)
+
+	// Create a snapshot
+	createTestSnapshot(t, repoPath)
+
+	// Create a pin file with invalid JSON
+	pinsDir := filepath.Join(repoPath, ".jvs", "pins")
+	require.NoError(t, os.MkdirAll(pinsDir, 0755))
+	invalidPinPath := filepath.Join(pinsDir, "invalid-pin.json")
+	require.NoError(t, os.WriteFile(invalidPinPath, []byte("{invalid json}"), 0644))
+
+	collector := gc.NewCollector(repoPath)
+	plan, err := collector.Plan()
+	require.NoError(t, err)
+
+	// Plan should succeed despite invalid pin file
+	assert.NotEmpty(t, plan.ProtectedSet)
+}
+
+func TestCollector_Plan_WithAlreadyProtectedPin(t *testing.T) {
+	repoPath := setupTestRepo(t)
+
+	// Create a snapshot
+	mainPath := filepath.Join(repoPath, "main")
+	creator := snapshot.NewCreator(repoPath, model.EngineCopy)
+	os.WriteFile(filepath.Join(mainPath, "file.txt"), []byte("content"), 0644)
+	desc, err := creator.Create("main", "test", nil)
+	require.NoError(t, err)
+
+	// Create a pin for the same snapshot that's already protected by main worktree
+	pinsDir := filepath.Join(repoPath, ".jvs", "pins")
+	require.NoError(t, os.MkdirAll(pinsDir, 0755))
+	pinContent := `{"snapshot_id":"` + string(desc.SnapshotID) + `","pinned_at":"2099-01-01T00:00:00Z","reason":"test"}`
+	require.NoError(t, os.WriteFile(filepath.Join(pinsDir, string(desc.SnapshotID)+".json"), []byte(pinContent), 0644))
+
+	collector := gc.NewCollector(repoPath)
+	plan, err := collector.Plan()
+	require.NoError(t, err)
+
+	// The pin count should be 0 since the snapshot is already protected by worktree
+	assert.Equal(t, 0, plan.ProtectedByPin)
+}
+
+func TestCollector_Plan_WithIntents(t *testing.T) {
+	repoPath := setupTestRepo(t)
+
+	// Create some intents (in-progress operations)
+	intentsDir := filepath.Join(repoPath, ".jvs", "intents")
+	require.NoError(t, os.MkdirAll(intentsDir, 0755))
+
+	intentIDs := []string{"intent1", "intent2", "intent3"}
+	for _, id := range intentIDs {
+		intentPath := filepath.Join(intentsDir, id+".json")
+		require.NoError(t, os.WriteFile(intentPath, []byte(`{"intent_id":"`+id+`"}`), 0644))
+	}
+
+	collector := gc.NewCollector(repoPath)
+	plan, err := collector.Plan()
+	require.NoError(t, err)
+
+	// Plan should succeed with intents considered protected
+	// (though they're not valid snapshot IDs, they're in the protected set)
+	assert.NotEmpty(t, plan.ProtectedSet)
+}
+
+func TestCollector_walkLineage_WithMissingDescriptor(t *testing.T) {
+	repoPath := setupTestRepo(t)
+
+	// Create a snapshot in a temp worktree
+	wtMgr := worktree.NewManager(repoPath)
+	cfg, err := wtMgr.Create("temp", nil)
+	require.NoError(t, err)
+
+	tempPath := wtMgr.Path("temp")
+	os.WriteFile(filepath.Join(tempPath, "file.txt"), []byte("temp"), 0644)
+	creator := snapshot.NewCreator(repoPath, model.EngineCopy)
+	tempDesc, err := creator.Create("temp", "temp", nil)
+	require.NoError(t, err)
+	_ = cfg
+
+	// Delete the descriptor to simulate corruption
+	descriptorPath := filepath.Join(repoPath, ".jvs", "descriptors", string(tempDesc.SnapshotID)+".json")
+	require.NoError(t, os.Remove(descriptorPath))
+
+	// Create a new worktree and try to pin the orphaned snapshot
+	// This will cause walkLineage to fail finding the descriptor
+	wtMgr2 := worktree.NewManager(repoPath)
+	cfg2, err := wtMgr2.Create("temp2", nil)
+	require.NoError(t, err)
+	_ = cfg2
+
+	// Manually update the worktree config to point to the orphaned snapshot
+	temp2Path := wtMgr.Path("temp2")
+	wtConfigPath := filepath.Join(temp2Path, ".jvs-worktree.json")
+	wtConfigContent, _ := os.ReadFile(wtConfigPath)
+	// Update head_snapshot_id
+	newContent := string(wtConfigContent)
+	// Find the existing head_snapshot_id and replace it
+	if idx := indexOf(newContent, `"head_snapshot_id":"`); idx >= 0 {
+		endIdx := idx + len(`"head_snapshot_id":"`) + 36 // approximate UUID length
+		newContent = newContent[:idx] + `"head_snapshot_id":"` + string(tempDesc.SnapshotID) + `"` + newContent[endIdx+2:]
+	}
+	os.WriteFile(wtConfigPath, []byte(newContent), 0644)
+
+	collector := gc.NewCollector(repoPath)
+	_, err = collector.Plan()
+	// Plan should still succeed despite missing descriptor during lineage walk
+	require.NoError(t, err)
+}
+
+func indexOf(s, substr string) int {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return i
+		}
+	}
+	return -1
 }

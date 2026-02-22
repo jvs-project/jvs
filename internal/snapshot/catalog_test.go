@@ -14,6 +14,26 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// Test matchesFilter directly for more coverage
+func TestMatchesFilter_Direct(t *testing.T) {
+	repoPath := setupCatalogTestRepo(t)
+
+	desc := createCatalogSnapshot(t, repoPath, "test snapshot", []string{"tag1", "tag2"})
+
+	// Test that matching worktree name works
+	opts := snapshot.FilterOptions{WorktreeName: "main"}
+	matches, err := snapshot.Find(repoPath, opts)
+	require.NoError(t, err)
+	assert.Len(t, matches, 1)
+	assert.Equal(t, desc.SnapshotID, matches[0].SnapshotID)
+
+	// Test that non-matching worktree name filters out
+	opts = snapshot.FilterOptions{WorktreeName: "other"}
+	matches, err = snapshot.Find(repoPath, opts)
+	require.NoError(t, err)
+	assert.Empty(t, matches)
+}
+
 func setupCatalogTestRepo(t *testing.T) string {
 	dir := t.TempDir()
 	_, err := repo.Init(dir, "test")
@@ -299,4 +319,216 @@ func TestListAll_HandlesCorruptDescriptor(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, all, 1)
 	assert.Equal(t, desc.SnapshotID, all[0].SnapshotID)
+}
+
+func TestListAll_NonexistentSnapshotsDir(t *testing.T) {
+	// Create a repo without snapshots directory
+	dir := t.TempDir()
+	_, err := repo.Init(dir, "test")
+	require.NoError(t, err)
+
+	// Remove snapshots directory
+	snapshotsDir := filepath.Join(dir, ".jvs", "snapshots")
+	os.RemoveAll(snapshotsDir)
+
+	// ListAll should return empty, not error
+	all, err := snapshot.ListAll(dir)
+	require.NoError(t, err)
+	assert.Empty(t, all)
+}
+
+func TestListAll_ReadError(t *testing.T) {
+	// Create a directory that's not readable
+	dir := t.TempDir()
+	_, err := repo.Init(dir, "test")
+	require.NoError(t, err)
+
+	// Make .jvs not readable
+	jvsDir := filepath.Join(dir, ".jvs")
+	require.NoError(t, os.Chmod(jvsDir, 0000))
+	defer os.Chmod(jvsDir, 0755) // cleanup
+
+	// ListAll should error
+	_, err = snapshot.ListAll(dir)
+	assert.Error(t, err)
+}
+
+func TestListAll_SkipsNonDirectories(t *testing.T) {
+	repoPath := setupCatalogTestRepo(t)
+
+	// Create a valid snapshot
+	desc := createCatalogSnapshot(t, repoPath, "valid", nil)
+
+	// Create a file in snapshots directory (not a directory)
+	snapshotsDir := filepath.Join(repoPath, ".jvs", "snapshots")
+	require.NoError(t, os.WriteFile(filepath.Join(snapshotsDir, "not-a-dir.txt"), []byte("content"), 0644))
+
+	// ListAll should skip the file
+	all, err := snapshot.ListAll(repoPath)
+	require.NoError(t, err)
+	assert.Len(t, all, 1)
+	assert.Equal(t, desc.SnapshotID, all[0].SnapshotID)
+}
+
+func TestFind_UntilFilter(t *testing.T) {
+	repoPath := setupCatalogTestRepo(t)
+
+	createCatalogSnapshot(t, repoPath, "first", nil)
+
+	// Get time after first snapshot
+	middle := time.Now().UTC()
+	time.Sleep(10 * time.Millisecond)
+
+	createCatalogSnapshot(t, repoPath, "second", nil)
+	time.Sleep(10 * time.Millisecond)
+
+	createCatalogSnapshot(t, repoPath, "third", nil)
+
+	// Find snapshots up to middle (should only include first)
+	opts := snapshot.FilterOptions{Until: middle}
+	matches, err := snapshot.Find(repoPath, opts)
+	require.NoError(t, err)
+	assert.Len(t, matches, 1)
+	assert.Equal(t, "first", matches[0].Note)
+}
+
+func TestFind_ListAllErrorPropagation(t *testing.T) {
+	// Create a directory that's not readable
+	dir := t.TempDir()
+	_, err := repo.Init(dir, "test")
+	require.NoError(t, err)
+
+	// Make .jvs not readable
+	jvsDir := filepath.Join(dir, ".jvs")
+	require.NoError(t, os.Chmod(jvsDir, 0000))
+	defer os.Chmod(jvsDir, 0755) // cleanup
+
+	// Find should propagate the error from ListAll
+	opts := snapshot.FilterOptions{WorktreeName: "main"}
+	_, err = snapshot.Find(dir, opts)
+	assert.Error(t, err)
+}
+
+func TestFindOne_ListAllErrorPropagation(t *testing.T) {
+	// Create a directory that's not readable
+	dir := t.TempDir()
+	_, err := repo.Init(dir, "test")
+	require.NoError(t, err)
+
+	// Make .jvs not readable
+	jvsDir := filepath.Join(dir, ".jvs")
+	require.NoError(t, os.Chmod(jvsDir, 0000))
+	defer os.Chmod(jvsDir, 0755) // cleanup
+
+	// FindOne should propagate the error from ListAll
+	_, err = snapshot.FindOne(dir, "test")
+	assert.Error(t, err)
+}
+
+func TestMatchesFilter_MissingWorktreeName(t *testing.T) {
+	// Test matchesFilter when filter WorktreeName is empty
+	// This exercises the code path where empty WorktreeName doesn't filter
+	repoPath := setupCatalogTestRepo(t)
+
+	desc := createCatalogSnapshot(t, repoPath, "test", nil)
+
+	// Empty WorktreeName should match any snapshot
+	opts := snapshot.FilterOptions{WorktreeName: ""}
+	matches, err := snapshot.Find(repoPath, opts)
+	require.NoError(t, err)
+	assert.Len(t, matches, 1)
+	assert.Equal(t, desc.SnapshotID, matches[0].SnapshotID)
+}
+
+func TestMatchesFilter_ZeroSinceTime(t *testing.T) {
+	// Test matchesFilter when Since time is zero
+	repoPath := setupCatalogTestRepo(t)
+
+	createCatalogSnapshot(t, repoPath, "test", nil)
+
+	// Zero Since time should not filter
+	opts := snapshot.FilterOptions{Since: time.Time{}}
+	matches, err := snapshot.Find(repoPath, opts)
+	require.NoError(t, err)
+	assert.Len(t, matches, 1)
+}
+
+func TestMatchesFilter_ZeroUntilTime(t *testing.T) {
+	// Test matchesFilter when Until time is zero
+	repoPath := setupCatalogTestRepo(t)
+
+	createCatalogSnapshot(t, repoPath, "test", nil)
+
+	// Zero Until time should not filter
+	opts := snapshot.FilterOptions{Until: time.Time{}}
+	matches, err := snapshot.Find(repoPath, opts)
+	require.NoError(t, err)
+	assert.Len(t, matches, 1)
+}
+
+func TestMatchesFilter_MissingNoteContains(t *testing.T) {
+	// Test matchesFilter when filter NoteContains is empty
+	repoPath := setupCatalogTestRepo(t)
+
+	desc := createCatalogSnapshot(t, repoPath, "test note", nil)
+
+	// Empty NoteContains should match any snapshot
+	opts := snapshot.FilterOptions{NoteContains: ""}
+	matches, err := snapshot.Find(repoPath, opts)
+	require.NoError(t, err)
+	assert.Len(t, matches, 1)
+	assert.Equal(t, desc.SnapshotID, matches[0].SnapshotID)
+}
+
+func TestMatchesFilter_NoTagsInDescriptor(t *testing.T) {
+	// Test hasTag when descriptor has no tags
+	repoPath := setupCatalogTestRepo(t)
+
+	_ = createCatalogSnapshot(t, repoPath, "test", nil)
+
+	// HasTag filter should not match snapshot with no tags
+	opts := snapshot.FilterOptions{HasTag: "sometag"}
+	matches, err := snapshot.Find(repoPath, opts)
+	require.NoError(t, err)
+	assert.Empty(t, matches)
+}
+
+func TestFindOne_MatchesExactTag(t *testing.T) {
+	// Test that FindOne matches exact tag, not just prefix
+	repoPath := setupCatalogTestRepo(t)
+
+	createCatalogSnapshot(t, repoPath, "test", []string{"v1.0.0"})
+
+	// Exact tag match should work
+	desc, err := snapshot.FindOne(repoPath, "v1.0.0")
+	require.NoError(t, err)
+	assert.Equal(t, "v1.0.0", desc.Tags[0])
+}
+
+func TestMatchesQuery_NonMatchingNotePrefix(t *testing.T) {
+	// Test matchesQuery when note doesn't match prefix
+	repoPath := setupCatalogTestRepo(t)
+
+	createCatalogSnapshot(t, repoPath, "release", nil)
+
+	// Query that doesn't match note prefix should not match
+	_, err := snapshot.FindOne(repoPath, "feature")
+	assert.Error(t, err)
+}
+
+func TestFindByTag_FindErrorPropagation(t *testing.T) {
+	// Test that FindByTag propagates errors from Find
+	// Create a directory that's not readable
+	dir := t.TempDir()
+	_, err := repo.Init(dir, "test")
+	require.NoError(t, err)
+
+	// Make .jvs not readable
+	jvsDir := filepath.Join(dir, ".jvs")
+	require.NoError(t, os.Chmod(jvsDir, 0000))
+	defer os.Chmod(jvsDir, 0755) // cleanup
+
+	// FindByTag should propagate the error from Find
+	_, err = snapshot.FindByTag(dir, "release")
+	assert.Error(t, err)
 }

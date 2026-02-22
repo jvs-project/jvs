@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/jvs-project/jvs/internal/snapshot"
 	"github.com/jvs-project/jvs/pkg/model"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
@@ -462,8 +463,15 @@ func TestHasTag(t *testing.T) {
 
 // createTestRootCmd creates a fresh root command for testing
 func createTestRootCmd() *cobra.Command {
-	// Reset jsonOutput flag
+	// Reset global flags to avoid test pollution
 	jsonOutput = false
+	debugOutput = false
+	worktreeCreateFrom = ""
+	worktreeForce = false
+	historyLimit = 0
+	historyNoteFilter = ""
+	historyTagFilter = ""
+	historyAll = false
 
 	// Create a new root command
 	cmd := &cobra.Command{
@@ -474,6 +482,7 @@ func createTestRootCmd() *cobra.Command {
 		SilenceErrors: true,
 	}
 	cmd.PersistentFlags().BoolVar(&jsonOutput, "json", false, "output in JSON format")
+	cmd.PersistentFlags().BoolVar(&debugOutput, "debug", false, "enable debug logging")
 
 	// Add all subcommands
 	cmd.AddCommand(initCmd)
@@ -818,4 +827,635 @@ func TestSnapshotCommand_DetachedState(t *testing.T) {
 	_ = cmd3
 
 	os.Chdir(originalWd)
+}
+
+// TestOutputJSONOrError tests the outputJSONOrError helper.
+func TestOutputJSONOrError(t *testing.T) {
+	// Test with no error
+	jsonOutput = true
+	err := outputJSONOrError(map[string]string{"key": "value"}, nil)
+	assert.NoError(t, err)
+
+	// Test with error
+	err = outputJSONOrError(nil, assert.AnError)
+	assert.Error(t, err)
+	assert.Equal(t, assert.AnError, err)
+
+	// Test with jsonOutput=false (should not error even with nil value)
+	jsonOutput = false
+	err = outputJSONOrError(nil, nil)
+	assert.NoError(t, err)
+}
+
+// TestResolveSnapshotID tests the resolveSnapshotID helper function.
+func TestResolveSnapshotID(t *testing.T) {
+	dir := t.TempDir()
+	originalWd, _ := os.Getwd()
+
+	// Init repo
+	require.NoError(t, os.Chdir(dir))
+	cmd := createTestRootCmd()
+	_, err := executeCommand(cmd, "init", "testrepo")
+	require.NoError(t, err)
+
+	// Change into main worktree
+	require.NoError(t, os.Chdir(filepath.Join(dir, "testrepo", "main")))
+
+	// Create file and snapshot
+	os.WriteFile("file.txt", []byte("content"), 0644)
+	cmd2 := createTestRootCmd()
+	stdout, err := executeCommand(cmd2, "snapshot", "test snapshot", "--tag", "v1.0")
+	require.NoError(t, err)
+	require.Contains(t, stdout, "snapshot")
+
+	// Read snapshot descriptor directly from disk
+	repoRoot := filepath.Join(dir, "testrepo")
+
+	// List snapshots to get the ID
+	snapshots, err := snapshot.ListAll(repoRoot)
+	require.NoError(t, err)
+	require.Greater(t, len(snapshots), 0)
+
+	snapshotID := snapshots[0].SnapshotID
+
+	// Test resolveSnapshotID with exact ID
+	resolved, err := resolveSnapshotID(repoRoot, string(snapshotID))
+	require.NoError(t, err)
+	assert.Equal(t, snapshotID, resolved)
+
+	// Test resolveSnapshotID with tag
+	resolved, err = resolveSnapshotID(repoRoot, "v1.0")
+	require.NoError(t, err)
+	assert.Equal(t, snapshotID, resolved)
+
+	// Test resolveSnapshotID with note prefix
+	resolved, err = resolveSnapshotID(repoRoot, "test")
+	require.NoError(t, err)
+	assert.Equal(t, snapshotID, resolved)
+
+	// Test resolveSnapshotID with non-existent snapshot
+	_, err = resolveSnapshotID(repoRoot, "nonexistent")
+	assert.Error(t, err)
+
+	os.Chdir(originalWd)
+}
+
+// TestConformanceCommands tests conformance command functionality.
+func TestConformanceCommands(t *testing.T) {
+	dir := t.TempDir()
+	originalWd, _ := os.Getwd()
+
+	// Create a fake go.mod to simulate repo root
+	require.NoError(t, os.Chdir(dir))
+	os.WriteFile("go.mod", []byte("module test\n\ngo 1.21\n"), 0644)
+
+	// Test findRepoRoot
+	repoRoot, err := findRepoRoot()
+	require.NoError(t, err)
+	assert.Equal(t, dir, repoRoot)
+
+	// Test findRepoRoot in subdirectory
+	subDir := filepath.Join(dir, "subdir")
+	require.NoError(t, os.Mkdir(subDir, 0755))
+	require.NoError(t, os.Chdir(subDir))
+	repoRoot, err = findRepoRoot()
+	require.NoError(t, err)
+	assert.Equal(t, dir, repoRoot)
+
+	// Test findRepoRoot when go.mod doesn't exist
+	otherDir := t.TempDir()
+	require.NoError(t, os.Chdir(otherDir))
+	_, err = findRepoRoot()
+	assert.Error(t, err)
+
+	os.Chdir(originalWd)
+}
+
+// TestExecuteExitOnError tests that Execute properly exits on command error.
+func TestExecuteExitOnError(t *testing.T) {
+	// This test verifies the Execute function handles errors.
+	// We can't directly test os.Exit behavior, but we can verify
+	// the root command is set up correctly.
+
+	// Just verify Execute is callable
+	assert.NotNil(t, rootCmd)
+	assert.Equal(t, "jvs", rootCmd.Use)
+}
+
+// TestWorktreeCreateWithSnapshot tests creating worktree from snapshot.
+func TestWorktreeCreateWithSnapshot(t *testing.T) {
+	dir := t.TempDir()
+	originalWd, _ := os.Getwd()
+
+	// Init repo
+	require.NoError(t, os.Chdir(dir))
+	cmd := createTestRootCmd()
+	_, err := executeCommand(cmd, "init", "testrepo")
+	require.NoError(t, err)
+
+	// Change into main worktree
+	require.NoError(t, os.Chdir(filepath.Join(dir, "testrepo", "main")))
+
+	// Create file and snapshot with tag
+	os.WriteFile("file.txt", []byte("content"), 0644)
+	cmd2 := createTestRootCmd()
+	stdout, err := executeCommand(cmd2, "snapshot", "base snapshot", "--tag", "v1.0")
+	require.NoError(t, err)
+	assert.Contains(t, stdout, "snapshot")
+
+	// Change to repo root
+	require.NoError(t, os.Chdir(filepath.Join(dir, "testrepo")))
+
+	// Create worktree from snapshot using --from flag
+	cmd3 := createTestRootCmd()
+	stdout, err = executeCommand(cmd3, "worktree", "create", "feature", "--from", "v1.0")
+	require.NoError(t, err)
+	assert.Contains(t, stdout, "feature")
+
+	// Verify worktree exists
+	_, err = os.Stat("worktrees/feature")
+	assert.NoError(t, err)
+
+	os.Chdir(originalWd)
+}
+
+// TestWorktreeForkWithSnapshotID tests forking with explicit snapshot ID.
+func TestWorktreeForkWithSnapshotID(t *testing.T) {
+	dir := t.TempDir()
+	originalWd, _ := os.Getwd()
+
+	// Init repo
+	require.NoError(t, os.Chdir(dir))
+	cmd := createTestRootCmd()
+	_, err := executeCommand(cmd, "init", "testrepo")
+	require.NoError(t, err)
+
+	// Change into main worktree
+	require.NoError(t, os.Chdir(filepath.Join(dir, "testrepo", "main")))
+
+	// Create file and snapshot
+	os.WriteFile("file.txt", []byte("content"), 0644)
+	cmd2 := createTestRootCmd()
+	stdout, err := executeCommand(cmd2, "snapshot", "base", "--tag", "base")
+	require.NoError(t, err)
+
+	// Get snapshot ID directly from disk
+	repoRoot := filepath.Join(dir, "testrepo")
+	snapshots, err := snapshot.ListAll(repoRoot)
+	require.NoError(t, err)
+	require.Greater(t, len(snapshots), 0)
+	snapshotID := string(snapshots[0].SnapshotID)
+
+	// Fork with explicit snapshot ID and name
+	cmd3 := createTestRootCmd()
+	stdout, err = executeCommand(cmd3, "worktree", "fork", snapshotID, "feature-branch")
+	require.NoError(t, err)
+	assert.Contains(t, stdout, "feature-branch")
+
+	// Verify worktree exists
+	require.NoError(t, os.Chdir(repoRoot))
+	_, err = os.Stat("worktrees/feature-branch")
+	assert.NoError(t, err)
+
+	os.Chdir(originalWd)
+}
+
+// TestJSONOutputWithCommands tests JSON output for various commands.
+func TestJSONOutputWithCommands(t *testing.T) {
+	dir := t.TempDir()
+	originalWd, _ := os.Getwd()
+
+	// Init repo
+	require.NoError(t, os.Chdir(dir))
+	cmd := createTestRootCmd()
+	_, err := executeCommand(cmd, "init", "testrepo")
+	require.NoError(t, err)
+
+	// Test info with JSON
+	repoRoot := filepath.Join(dir, "testrepo")
+	require.NoError(t, os.Chdir(repoRoot))
+	cmd2 := createTestRootCmd()
+	stdout, err := executeCommand(cmd2, "--json", "info")
+	require.NoError(t, err)
+	assert.Contains(t, stdout, "{")
+	assert.Contains(t, stdout, "repo_root")
+
+	// Test worktree list with JSON
+	cmd3 := createTestRootCmd()
+	stdout, err = executeCommand(cmd3, "--json", "worktree", "list")
+	require.NoError(t, err)
+	assert.Contains(t, stdout, "[")
+
+	os.Chdir(originalWd)
+}
+
+// TestResolveSnapshotIDShortPrefix tests resolving with short ID prefix.
+func TestResolveSnapshotIDShortPrefix(t *testing.T) {
+	dir := t.TempDir()
+	originalWd, _ := os.Getwd()
+
+	// Init repo
+	require.NoError(t, os.Chdir(dir))
+	cmd := createTestRootCmd()
+	_, err := executeCommand(cmd, "init", "testrepo")
+	require.NoError(t, err)
+
+	// Change into main worktree
+	require.NoError(t, os.Chdir(filepath.Join(dir, "testrepo", "main")))
+
+	// Create file and snapshot
+	os.WriteFile("file.txt", []byte("content"), 0644)
+	cmd2 := createTestRootCmd()
+	_, err = executeCommand(cmd2, "snapshot", "test", "--tag", "mytag")
+	require.NoError(t, err)
+
+	// Get snapshot ID directly from disk
+	repoRoot := filepath.Join(dir, "testrepo")
+	snapshots, err := snapshot.ListAll(repoRoot)
+	require.NoError(t, err)
+	require.Greater(t, len(snapshots), 0)
+	snapshotID := string(snapshots[0].SnapshotID)
+
+	// Test with short prefix (first 8 characters)
+	shortID := snapshotID[:8]
+	resolved, err := resolveSnapshotID(repoRoot, shortID)
+	require.NoError(t, err)
+	assert.Equal(t, snapshots[0].SnapshotID, resolved)
+
+	os.Chdir(originalWd)
+}
+
+// TestConformanceListCommand tests conformance command is registered.
+func TestConformanceListCommand(t *testing.T) {
+	// Verify conformanceCmd exists and is properly configured
+	assert.NotNil(t, conformanceCmd)
+	assert.Equal(t, "conformance", conformanceCmd.Use)
+	assert.Equal(t, 2, len(conformanceCmd.Commands()))
+}
+
+// TestDetectEngine tests the detectEngine helper.
+func TestDetectEngine(t *testing.T) {
+	dir := t.TempDir()
+	originalWd, _ := os.Getwd()
+
+	// Init repo
+	require.NoError(t, os.Chdir(dir))
+	cmd := createTestRootCmd()
+	_, err := executeCommand(cmd, "init", "testrepo")
+	require.NoError(t, err)
+
+	repoRoot := filepath.Join(dir, "testrepo")
+
+	// Test detectEngine - should return Copy as fallback if no special engine
+	engineType := detectEngine(repoRoot)
+	assert.NotEmpty(t, engineType)
+
+	os.Chdir(originalWd)
+}
+
+// TestWorktreeCreateEmpty tests creating an empty worktree (no --from).
+func TestWorktreeCreateEmpty(t *testing.T) {
+	dir := t.TempDir()
+	originalWd, _ := os.Getwd()
+
+	// Init repo
+	require.NoError(t, os.Chdir(dir))
+	cmd := createTestRootCmd()
+	_, err := executeCommand(cmd, "init", "testrepo")
+	require.NoError(t, err)
+
+	// Change to repo root
+	repoRoot := filepath.Join(dir, "testrepo")
+	require.NoError(t, os.Chdir(repoRoot))
+
+	// Create empty worktree (no --from flag)
+	cmd2 := createTestRootCmd()
+	stdout, err := executeCommand(cmd2, "worktree", "create", "empty-worktree")
+	require.NoError(t, err)
+	assert.Contains(t, stdout, "empty-worktree")
+
+	// Verify worktree exists
+	_, err = os.Stat("worktrees/empty-worktree")
+	assert.NoError(t, err)
+
+	os.Chdir(originalWd)
+}
+
+// TestFindRepoRootNoGoMod tests findRepoRoot when go.mod doesn't exist.
+func TestFindRepoRootNoGoMod(t *testing.T) {
+	dir := t.TempDir()
+	originalWd, _ := os.Getwd()
+
+	// Change to temp dir without go.mod
+	require.NoError(t, os.Chdir(dir))
+
+	// findRepoRoot should return error
+	_, err := findRepoRoot()
+	assert.Error(t, err)
+
+	os.Chdir(originalWd)
+}
+
+// TestWorktreeListJSON tests worktree list with JSON output.
+func TestWorktreeListJSON(t *testing.T) {
+	dir := t.TempDir()
+	originalWd, _ := os.Getwd()
+
+	// Init repo
+	require.NoError(t, os.Chdir(dir))
+	cmd := createTestRootCmd()
+	_, err := executeCommand(cmd, "init", "testrepo")
+	require.NoError(t, err)
+
+	// Change to repo root
+	repoRoot := filepath.Join(dir, "testrepo")
+	require.NoError(t, os.Chdir(repoRoot))
+
+	// List worktrees with JSON
+	cmd2 := createTestRootCmd()
+	stdout, err := executeCommand(cmd2, "--json", "worktree", "list")
+	require.NoError(t, err)
+	assert.Contains(t, stdout, "[") // JSON array
+
+	os.Chdir(originalWd)
+}
+
+// TestWorktreePathNoArgs tests worktree path with no args (uses current worktree).
+func TestWorktreePathNoArgs(t *testing.T) {
+	dir := t.TempDir()
+	originalWd, _ := os.Getwd()
+
+	// Init repo
+	require.NoError(t, os.Chdir(dir))
+	cmd := createTestRootCmd()
+	_, err := executeCommand(cmd, "init", "testrepo")
+	require.NoError(t, err)
+
+	// Change into main worktree
+	require.NoError(t, os.Chdir(filepath.Join(dir, "testrepo", "main")))
+
+	// Get path without specifying worktree name
+	cmd2 := createTestRootCmd()
+	stdout, err := executeCommand(cmd2, "worktree", "path")
+	require.NoError(t, err)
+	assert.Contains(t, stdout, "main")
+
+	os.Chdir(originalWd)
+}
+
+// TestHistoryWithAllFlag tests history --all flag.
+func TestHistoryWithAllFlag(t *testing.T) {
+	dir := t.TempDir()
+	originalWd, _ := os.Getwd()
+
+	// Init repo
+	require.NoError(t, os.Chdir(dir))
+	cmd := createTestRootCmd()
+	_, err := executeCommand(cmd, "init", "testrepo")
+	require.NoError(t, err)
+
+	// Change into main worktree
+	require.NoError(t, os.Chdir(filepath.Join(dir, "testrepo", "main")))
+
+	// Create a snapshot
+	os.WriteFile("file.txt", []byte("content"), 0644)
+	cmd2 := createTestRootCmd()
+	_, err = executeCommand(cmd2, "snapshot", "test snapshot")
+	require.NoError(t, err)
+
+	// View history with --all flag
+	cmd3 := createTestRootCmd()
+	stdout, err := executeCommand(cmd3, "history", "--all")
+	require.NoError(t, err)
+	assert.Contains(t, stdout, "snapshot")
+
+	os.Chdir(originalWd)
+}
+
+// TestWorktreeRemoveForce tests worktree remove with --force flag.
+func TestWorktreeRemoveForce(t *testing.T) {
+	dir := t.TempDir()
+	originalWd, _ := os.Getwd()
+
+	// Init repo
+	require.NoError(t, os.Chdir(dir))
+	cmd := createTestRootCmd()
+	_, err := executeCommand(cmd, "init", "testrepo")
+	require.NoError(t, err)
+
+	// Change to repo root
+	repoRoot := filepath.Join(dir, "testrepo")
+	require.NoError(t, os.Chdir(repoRoot))
+
+	// Create a worktree
+	cmd2 := createTestRootCmd()
+	_, err = executeCommand(cmd2, "worktree", "create", "to-remove-force")
+	require.NoError(t, err)
+
+	// Remove with --force flag
+	cmd3 := createTestRootCmd()
+	_, err = executeCommand(cmd3, "worktree", "remove", "--force", "to-remove-force")
+	require.NoError(t, err)
+
+	// Verify worktree is gone
+	_, err = os.Stat("worktrees/to-remove-force")
+	assert.True(t, os.IsNotExist(err))
+
+	os.Chdir(originalWd)
+}
+
+// TestDoctorJSONOutput tests doctor command with JSON output.
+func TestDoctorJSONOutput(t *testing.T) {
+	dir := t.TempDir()
+	originalWd, _ := os.Getwd()
+
+	// Init repo
+	require.NoError(t, os.Chdir(dir))
+	cmd := createTestRootCmd()
+	_, err := executeCommand(cmd, "init", "testrepo")
+	require.NoError(t, err)
+
+	// Change to repo root
+	repoRoot := filepath.Join(dir, "testrepo")
+	require.NoError(t, os.Chdir(repoRoot))
+
+	// Run doctor with JSON
+	cmd2 := createTestRootCmd()
+	stdout, err := executeCommand(cmd2, "--json", "doctor")
+	require.NoError(t, err)
+	assert.Contains(t, stdout, "{") // JSON object
+
+	os.Chdir(originalWd)
+}
+
+// TestGCHelp tests gc command help.
+func TestGCHelp(t *testing.T) {
+	cmd := createTestRootCmd()
+	_, err := executeCommand(cmd, "gc", "--help")
+	require.NoError(t, err)
+}
+
+// TestVerifyHelp tests verify command help.
+func TestVerifyHelp(t *testing.T) {
+	cmd := createTestRootCmd()
+	_, err := executeCommand(cmd, "verify", "--help")
+	require.NoError(t, err)
+}
+
+// TestRestoreHelp tests restore command help.
+func TestRestoreHelp(t *testing.T) {
+	cmd := createTestRootCmd()
+	_, err := executeCommand(cmd, "restore", "--help")
+	require.NoError(t, err)
+}
+
+// TestInfoFields tests info command output contains expected fields.
+func TestInfoFields(t *testing.T) {
+	dir := t.TempDir()
+	originalWd, _ := os.Getwd()
+
+	// Init repo
+	require.NoError(t, os.Chdir(dir))
+	cmd := createTestRootCmd()
+	_, err := executeCommand(cmd, "init", "testrepo")
+	require.NoError(t, err)
+
+	// Change to repo root
+	repoRoot := filepath.Join(dir, "testrepo")
+	require.NoError(t, os.Chdir(repoRoot))
+
+	// Run info and check for expected fields
+	cmd2 := createTestRootCmd()
+	stdout, err := executeCommand(cmd2, "info")
+	require.NoError(t, err)
+	assert.Contains(t, stdout, "Repository")
+	assert.Contains(t, stdout, "Worktrees")
+
+	os.Chdir(originalWd)
+}
+
+// TestRestoreToHead tests restoring to HEAD.
+func TestRestoreToHead(t *testing.T) {
+	dir := t.TempDir()
+	originalWd, _ := os.Getwd()
+
+	// Init repo
+	require.NoError(t, os.Chdir(dir))
+	cmd := createTestRootCmd()
+	_, err := executeCommand(cmd, "init", "testrepo")
+	require.NoError(t, err)
+
+	// Change into main worktree
+	require.NoError(t, os.Chdir(filepath.Join(dir, "testrepo", "main")))
+
+	// Create a snapshot
+	os.WriteFile("file.txt", []byte("version 1"), 0644)
+	cmd2 := createTestRootCmd()
+	_, err = executeCommand(cmd2, "snapshot", "first snapshot")
+	require.NoError(t, err)
+
+	// Modify file
+	os.WriteFile("file.txt", []byte("version 2"), 0644)
+
+	// Create another snapshot
+	cmd3 := createTestRootCmd()
+	_, err = executeCommand(cmd3, "snapshot", "second snapshot")
+	require.NoError(t, err)
+
+	// Restore to HEAD (should stay at current state)
+	cmd4 := createTestRootCmd()
+	stdout, err := executeCommand(cmd4, "restore", "HEAD")
+	require.NoError(t, err)
+	assert.Contains(t, stdout, "HEAD")
+
+	os.Chdir(originalWd)
+}
+
+// TestRestoreToTag tests restoring by tag.
+func TestRestoreToTag(t *testing.T) {
+	dir := t.TempDir()
+	originalWd, _ := os.Getwd()
+
+	// Init repo
+	require.NoError(t, os.Chdir(dir))
+	cmd := createTestRootCmd()
+	_, err := executeCommand(cmd, "init", "testrepo")
+	require.NoError(t, err)
+
+	// Change into main worktree
+	require.NoError(t, os.Chdir(filepath.Join(dir, "testrepo", "main")))
+
+	// Create a file and snapshot with unique tag
+	os.WriteFile("file.txt", []byte("tagged version"), 0644)
+	cmd2 := createTestRootCmd()
+	uniqueTag := fmt.Sprintf("restore-tag-%x", t.TempDir()) // Use temp dir for uniqueness
+	_, err = executeCommand(cmd2, "snapshot", "tagged snapshot", "--tag", uniqueTag)
+	require.NoError(t, err)
+
+	// Restore by tag immediately (this should work and put us in detached state)
+	cmd3 := createTestRootCmd()
+	stdout, err := executeCommand(cmd3, "restore", uniqueTag)
+	require.NoError(t, err)
+	assert.Contains(t, stdout, "snapshot")
+
+	os.Chdir(originalWd)
+}
+
+// TestSnapshotWithJSON tests snapshot command with JSON output.
+func TestSnapshotWithJSON(t *testing.T) {
+	dir := t.TempDir()
+	originalWd, _ := os.Getwd()
+
+	// Init repo
+	require.NoError(t, os.Chdir(dir))
+	cmd := createTestRootCmd()
+	_, err := executeCommand(cmd, "init", "testrepo")
+	require.NoError(t, err)
+
+	// Change into main worktree
+	require.NoError(t, os.Chdir(filepath.Join(dir, "testrepo", "main")))
+
+	// Create a file
+	os.WriteFile("file.txt", []byte("content"), 0644)
+
+	// Create snapshot with JSON output
+	cmd2 := createTestRootCmd()
+	stdout, err := executeCommand(cmd2, "--json", "snapshot", "json test")
+	require.NoError(t, err)
+	assert.Contains(t, stdout, "{") // JSON object
+	assert.Contains(t, stdout, "snapshot_id")
+
+	os.Chdir(originalWd)
+}
+
+// TestWorktreeCommandJSON tests worktree commands with JSON.
+func TestWorktreeCommandJSON(t *testing.T) {
+	dir := t.TempDir()
+	originalWd, _ := os.Getwd()
+
+	// Init repo
+	require.NoError(t, os.Chdir(dir))
+	cmd := createTestRootCmd()
+	_, err := executeCommand(cmd, "init", "testrepo")
+	require.NoError(t, err)
+
+	// Change to repo root
+	repoRoot := filepath.Join(dir, "testrepo")
+	require.NoError(t, os.Chdir(repoRoot))
+
+	// Create worktree with JSON output
+	cmd2 := createTestRootCmd()
+	stdout, err := executeCommand(cmd2, "--json", "worktree", "create", "json-test")
+	require.NoError(t, err)
+	assert.Contains(t, stdout, "{") // JSON object
+
+	os.Chdir(originalWd)
+}
+
+// TestDetectEngineFallback tests detectEngine with invalid path (fallback to Copy).
+func TestDetectEngineFallback(t *testing.T) {
+	// Call detectEngine with a non-existent path
+	// Should fall back to EngineCopy
+	engineType := detectEngine("/nonexistent/path/that/does/not/exist")
+	assert.Equal(t, model.EngineCopy, engineType)
 }

@@ -1,15 +1,8 @@
-# Operation Runbook (v6.3)
+# Operation Runbook (v7.0)
 
 ## Daily checks
 1. run `jvs doctor --strict`
 2. run `jvs verify --all`
-3. inspect lock age and stale-holder alerts
-
-## Incident: lock stuck
-1. run `jvs lock status`
-2. confirm holder liveness and nonce/session match
-3. if expired, apply steal flow
-4. confirm fencing token increment and audit event
 
 ## Incident: verification failure
 1. freeze writes for affected repo
@@ -35,9 +28,8 @@
 ## Migration runbook
 1. freeze writers
 2. doctor + verify pass on source
-3. sync excluding `.jvs/locks/**` and `.jvs/intents/**`
+3. sync excluding `.jvs/intents/**`
 4. run `jvs doctor --strict --repair-runtime` on destination, which:
-   - `clean_locks`: removes stale lock files from source
    - `clean_intents`: removes abandoned intent files from source
    - `rebuild_index`: regenerates `index.sqlite`
 5. run `jvs verify --all` and recovery drill

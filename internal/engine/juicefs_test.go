@@ -83,3 +83,75 @@ func TestJuiceFSEngine_CloneWithSymlinks(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "target.txt", target)
 }
+
+func TestJuiceFSEngine_Clone_NotOnJuiceFS(t *testing.T) {
+	// Verify fallback when not on JuiceFS
+	src := t.TempDir()
+	dst := t.TempDir()
+	dstPath := filepath.Join(dst, "cloned")
+
+	os.WriteFile(filepath.Join(src, "file.txt"), []byte("content"), 0644)
+
+	eng := engine.NewJuiceFSEngine()
+	result, err := eng.Clone(src, dstPath)
+
+	require.NoError(t, err)
+	assert.True(t, result.Degraded)
+	// Should report "not-on-juicefs" or "juicefs-not-available" degradation
+	assert.NotEmpty(t, result.Degradations)
+
+	// Verify content was copied via fallback
+	content, err := os.ReadFile(filepath.Join(dstPath, "file.txt"))
+	require.NoError(t, err)
+	assert.Equal(t, "content", string(content))
+}
+
+func TestJuiceFSEngine_Clone_JuiceFSNotAvailable(t *testing.T) {
+	// Set environment to simulate juicefs not being available
+	os.Setenv("JVS_ENGINE", "juicefs")
+	defer os.Unsetenv("JVS_ENGINE")
+
+	src := t.TempDir()
+	dst := t.TempDir()
+	dstPath := filepath.Join(dst, "cloned")
+
+	os.WriteFile(filepath.Join(src, "file.txt"), []byte("test"), 0644)
+
+	eng := engine.NewJuiceFSEngine()
+	result, err := eng.Clone(src, dstPath)
+
+	require.NoError(t, err)
+	// Should fall back to copy since juicefs is not available
+	assert.True(t, result.Degraded)
+	assert.NotEmpty(t, result.Degradations)
+
+	// Verify content was copied
+	content, err := os.ReadFile(filepath.Join(dstPath, "file.txt"))
+	require.NoError(t, err)
+	assert.Equal(t, "test", string(content))
+}
+
+func TestJuiceFSEngine_DetectEngine_JuiceFSAvailable(t *testing.T) {
+	// When juicefs is available (simulated by setting env)
+	os.Setenv("JVS_ENGINE", "juicefs")
+	defer os.Unsetenv("JVS_ENGINE")
+
+	tmpDir := t.TempDir()
+	eng, err := engine.DetectEngine(tmpDir)
+
+	require.NoError(t, err)
+	assert.Equal(t, model.EngineJuiceFSClone, eng.Name())
+}
+
+func TestJuiceFSEngine_DetectEngine_PrefersJuiceFS(t *testing.T) {
+	// Without environment override, should try to detect JuiceFS first
+	tmpDir := t.TempDir()
+
+	// Clear env
+	os.Unsetenv("JVS_ENGINE")
+
+	eng, err := engine.DetectEngine(tmpDir)
+	require.NoError(t, err)
+	// Since JuiceFS isn't actually mounted, will fall back to reflink or copy
+	assert.NotNil(t, eng)
+}

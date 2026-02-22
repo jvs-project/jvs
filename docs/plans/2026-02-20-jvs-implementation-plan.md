@@ -868,12 +868,12 @@ git commit -m "feat: add atomic write and fsync utilities (pkg/fsutil)"
 
 ### Task 2.1: Data Models (pkg/model/)
 
-**Ref:** `docs/04_SNAPSHOT_SCOPE_AND_LINEAGE_SPEC.md` — Descriptor schema, Snapshot ID; `docs/03_WORKTREE_SPEC.md` — config.json schema; `docs/07_LOCKING_AND_CONSISTENCY_SPEC.md` — Lock record schema
+**Ref:** `docs/04_SNAPSHOT_SCOPE_AND_LINEAGE_SPEC.md` — Descriptor schema, Snapshot ID; `docs/03_WORKTREE_SPEC.md` — config.json schema
 
 **Files:**
 - Create: `pkg/model/snapshot.go` — SnapshotID, Descriptor, ReadyMarker, IntentRecord
 - Create: `pkg/model/worktree.go` — WorktreeConfig
-- Create: `pkg/model/lock.go` — LockRecord, LockSession, LockPolicy
+- ~~Create: `pkg/model/lock.go` — LockRecord, LockSession, LockPolicy~~ **REMOVED in v6.7** (lock mechanism deemed over-engineered for local-first workflows)
 - Create: `pkg/model/audit.go` — AuditRecord
 - Create: `pkg/model/ref.go` — RefRecord
 - Create: `pkg/model/gc.go` — Pin, GCPlan, Tombstone, RetentionPolicy
@@ -1090,13 +1090,13 @@ git commit -m "feat: add JuiceFS clone engine (internal/engine)"
 
 ---
 
-### Task 3.4: Lock Manager (internal/lock/)
+### Task 3.4: Lock Manager (internal/lock/) ~~REMOVED in v6.7~~
 
-**Ref:** `docs/07_LOCKING_AND_CONSISTENCY_SPEC.md` — full protocol
+**Ref:** `docs/07_LOCKING_AND_CONSISTENCY_SPEC.md` — full protocol ~~(SPEC REMOVED)~~
 
 **Files:**
-- Create: `internal/lock/manager.go`
-- Create: `internal/lock/manager_test.go`
+- ~~Create: `internal/lock/manager.go`~~ **REMOVED**
+- ~~Create: `internal/lock/manager_test.go`~~ **REMOVED**
 
 **Step 1: Write failing tests**
 
@@ -1113,6 +1113,7 @@ Full Acquire/Renew/Steal/Release/ValidateFencing as described in design Section 
 ```bash
 git commit -m "feat: add SWMR lock manager with fencing (internal/lock)"
 ```
+~~**REMOVED in v6.7** - This commit was reverted as part of lock mechanism removal.~~
 
 ---
 
@@ -1326,10 +1327,10 @@ git commit -m "feat: add jvs snapshot and history commands"
 
 ---
 
-### Task 5.3: Lock Commands
+### Task 5.3: Lock Commands ~~REMOVED in v6.7~~
 
 **Files:**
-- Create: `internal/cli/lock.go`
+- ~~Create: `internal/cli/lock.go`~~ **REMOVED**
 
 **Step 1-3: Implement acquire/status/renew/release subcommands**
 
@@ -1472,7 +1473,7 @@ git commit -m "feat: add conformance test infrastructure"
 ### Task 6.2: Conformance Tests 1-9 (Lock + Snapshot + Restore + Path + Integrity)
 
 **Files:**
-- Create: `test/conformance/lock_test.go` — tests 1, 2, 3
+- ~~Create: `test/conformance/lock_test.go` — tests 1, 2, 3~~ **REMOVED in v6.7** (lock conformance tests removed with lock mechanism)
 - Create: `test/conformance/snapshot_test.go` — tests 4, 5
 - Create: `test/conformance/restore_test.go` — test 6
 - Create: `test/conformance/path_test.go` — test 7
@@ -1503,7 +1504,7 @@ git commit -m "test: add conformance tests 1-9"
 - Create: `test/conformance/gc_test.go` — tests 12, 13, 22
 - Create: `test/conformance/audit_test.go` — tests 14, 15
 - Create: `test/conformance/format_test.go` — test 16
-- Extend: `test/conformance/lock_test.go` — tests 17, 23 (added to existing file)
+- ~~Extend: `test/conformance/lock_test.go` — tests 17, 23 (added to existing file)~~ **REMOVED in v6.7**
 - Extend: `test/conformance/snapshot_test.go` — tests 18, 19, 24 (added to existing file)
 - Create: `test/conformance/ref_test.go` — test 20
 

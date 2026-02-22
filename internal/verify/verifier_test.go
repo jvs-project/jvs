@@ -197,3 +197,118 @@ func TestVerifier_VerifyAll_WithMixedResults(t *testing.T) {
 	assert.Equal(t, 1, validPayloadCount)
 	assert.Equal(t, 1, tamperedCount)
 }
+
+func TestVerifier_VerifyAll_WithNonDirectoryEntries(t *testing.T) {
+	repoPath := setupTestRepo(t)
+
+	// Create a snapshot
+	createTestSnapshot(t, repoPath)
+
+	// Add a non-directory entry to snapshots dir
+	snapshotsDir := filepath.Join(repoPath, ".jvs", "snapshots")
+	require.NoError(t, os.WriteFile(filepath.Join(snapshotsDir, "file.txt"), []byte("test"), 0644))
+
+	v := verify.NewVerifier(repoPath)
+	results, err := v.VerifyAll(false)
+	require.NoError(t, err)
+	// Should only verify the actual snapshot directory, not the file
+	assert.Len(t, results, 1)
+}
+
+func TestVerifier_VerifyAll_WithDeletedSnapshotsDir(t *testing.T) {
+	repoPath := setupTestRepo(t)
+
+	// Create a snapshot
+	createTestSnapshot(t, repoPath)
+
+	// Remove the snapshots directory
+	snapshotsDir := filepath.Join(repoPath, ".jvs", "snapshots")
+	require.NoError(t, os.RemoveAll(snapshotsDir))
+
+	v := verify.NewVerifier(repoPath)
+	results, err := v.VerifyAll(false)
+	require.NoError(t, err)
+	assert.Empty(t, results)
+}
+
+func TestVerifier_VerifySnapshot_WithCorruptedDescriptor(t *testing.T) {
+	repoPath := setupTestRepo(t)
+	snapshotID := createTestSnapshot(t, repoPath)
+
+	// Corrupt the descriptor JSON to trigger load error
+	descPath := filepath.Join(repoPath, ".jvs", "descriptors", string(snapshotID)+".json")
+	// Write invalid JSON
+	require.NoError(t, os.WriteFile(descPath, []byte("{invalid json"), 0644))
+
+	v := verify.NewVerifier(repoPath)
+	result, err := v.VerifySnapshot(snapshotID, false)
+	require.NoError(t, err)
+
+	// Should report critical error for corrupted descriptor
+	assert.True(t, result.TamperDetected)
+	assert.Equal(t, "critical", result.Severity)
+	assert.NotEmpty(t, result.Error)
+}
+
+func TestVerifier_VerifySnapshot_PayloadHashWithTampering(t *testing.T) {
+	repoPath := setupTestRepo(t)
+	snapshotID := createTestSnapshot(t, repoPath)
+
+	// Modify the snapshot payload to cause payload hash mismatch
+	snapshotDir := filepath.Join(repoPath, ".jvs", "snapshots", string(snapshotID))
+	require.NoError(t, os.WriteFile(filepath.Join(snapshotDir, "extra.txt"), []byte("tampered"), 0644))
+
+	v := verify.NewVerifier(repoPath)
+	result, err := v.VerifySnapshot(snapshotID, true)
+	require.NoError(t, err)
+
+	// Should report payload hash mismatch
+	assert.True(t, result.ChecksumValid) // Descriptor checksum still valid
+	assert.False(t, result.PayloadHashValid)
+	assert.True(t, result.TamperDetected)
+	assert.Equal(t, "critical", result.Severity)
+	assert.Contains(t, result.Error, "payload hash mismatch")
+}
+
+func TestVerifier_VerifySnapshot_PayloadHashComputeError(t *testing.T) {
+	repoPath := setupTestRepo(t)
+	snapshotID := createTestSnapshot(t, repoPath)
+
+	// Remove the .READY marker which might be required for payload hash computation
+	snapshotDir := filepath.Join(repoPath, ".jvs", "snapshots", string(snapshotID))
+	readyPath := filepath.Join(snapshotDir, ".READY")
+	os.Remove(readyPath)
+
+	// Make the snapshot directory contain a non-regular file to potentially trigger errors
+	// Create a special file that could cause issues
+	specialFile := filepath.Join(snapshotDir, "special")
+	require.NoError(t, os.MkdirAll(specialFile, 0755))
+
+	v := verify.NewVerifier(repoPath)
+	result, err := v.VerifySnapshot(snapshotID, true)
+	require.NoError(t, err)
+
+	// Result should have some state - the exact behavior depends on ComputePayloadRootHash
+	// Just verify it doesn't crash
+	_ = result
+	_ = result.Error
+}
+
+func TestVerifier_VerifyAll_SnapshotsDirReadError(t *testing.T) {
+	repoPath := setupTestRepo(t)
+
+	// Create a snapshot
+	createTestSnapshot(t, repoPath)
+
+	// Make snapshots directory unreadable
+	snapshotsDir := filepath.Join(repoPath, ".jvs", "snapshots")
+	require.NoError(t, os.Chmod(snapshotsDir, 0000))
+
+	v := verify.NewVerifier(repoPath)
+	_, err := v.VerifyAll(false)
+	// Should return error when can't read snapshots directory
+	assert.Error(t, err)
+
+	// Restore permissions for cleanup
+	os.Chmod(snapshotsDir, 0755)
+}

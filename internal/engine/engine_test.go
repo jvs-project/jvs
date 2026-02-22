@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/jvs-project/jvs/internal/engine"
 	"github.com/jvs-project/jvs/pkg/model"
@@ -152,4 +153,89 @@ func TestCopyEngine_BrokenSymlink(t *testing.T) {
 	target, err := os.Readlink(filepath.Join(dstPath, "broken-link"))
 	require.NoError(t, err)
 	assert.Equal(t, "nonexistent", target)
+}
+
+func TestNewEngine_Copy(t *testing.T) {
+	eng := engine.NewEngine(model.EngineCopy)
+	assert.Equal(t, model.EngineCopy, eng.Name())
+}
+
+func TestNewEngine_Reflink(t *testing.T) {
+	eng := engine.NewEngine(model.EngineReflinkCopy)
+	assert.Equal(t, model.EngineReflinkCopy, eng.Name())
+}
+
+func TestNewEngine_JuiceFS(t *testing.T) {
+	eng := engine.NewEngine(model.EngineJuiceFSClone)
+	assert.Equal(t, model.EngineJuiceFSClone, eng.Name())
+}
+
+func TestNewEngine_UnknownFallback(t *testing.T) {
+	// Unknown engine types should fall back to Copy
+	eng := engine.NewEngine(model.EngineType("unknown"))
+	assert.Equal(t, model.EngineCopy, eng.Name())
+}
+
+func TestNewEngine_InvalidType(t *testing.T) {
+	// Empty string should also fall back to Copy
+	eng := engine.NewEngine("")
+	assert.Equal(t, model.EngineCopy, eng.Name())
+}
+
+func TestCopyEngine_DestinationCreationError(t *testing.T) {
+	src := t.TempDir()
+	dst := t.TempDir()
+
+	// Create a file where destination directory should be
+	dstPath := filepath.Join(dst, "file-blocker")
+	require.NoError(t, os.WriteFile(dstPath, []byte("block"), 0644))
+
+	// Try to clone into a path that includes a file as a directory component
+	cloneTo := filepath.Join(dstPath, "subdir", "cloned")
+
+	eng := engine.NewCopyEngine()
+	os.WriteFile(filepath.Join(src, "file.txt"), []byte("test"), 0644)
+
+	_, err := eng.Clone(src, cloneTo)
+	// Should error because can't create directory inside a file
+	assert.Error(t, err)
+}
+
+func TestCopyEngine_SymlinkReadError(t *testing.T) {
+	src := t.TempDir()
+	dst := t.TempDir()
+	dstPath := filepath.Join(dst, "cloned")
+
+	// Create a file (not a symlink) with link-like name
+	os.WriteFile(filepath.Join(src, "fake-link"), []byte("not a link"), 0644)
+
+	eng := engine.NewCopyEngine()
+	result, err := eng.Clone(src, dstPath)
+
+	// Should succeed - regular files are copied normally
+	require.NoError(t, err)
+	assert.False(t, result.Degraded)
+}
+
+func TestCopyEngine_PreservesModTime(t *testing.T) {
+	src := t.TempDir()
+	dst := t.TempDir()
+	dstPath := filepath.Join(dst, "cloned")
+
+	// Create a file with specific mod time
+	filePath := filepath.Join(src, "timestamp.txt")
+	os.WriteFile(filePath, []byte("time test"), 0644)
+
+	// Set a specific mod time
+	pastTime := time.Date(2020, 1, 1, 12, 0, 0, 0, time.UTC)
+	os.Chtimes(filePath, pastTime, pastTime)
+
+	eng := engine.NewCopyEngine()
+	_, err := eng.Clone(src, dstPath)
+	require.NoError(t, err)
+
+	// Verify mod time was preserved
+	info, err := os.Stat(filepath.Join(dstPath, "timestamp.txt"))
+	require.NoError(t, err)
+	assert.True(t, info.ModTime().Equal(pastTime) || info.ModTime().Sub(pastTime) < time.Second)
 }

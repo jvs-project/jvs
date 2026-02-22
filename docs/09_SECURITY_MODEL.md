@@ -1,12 +1,11 @@
-# Security Model (v6.5)
+# Security Model (v7.0)
 
 ## Scope
 Defines trust, integrity, and operational security requirements for JVS repositories.
 
 ## Security objectives
-- prevent stale-writer corruption via lock + fencing
 - detect descriptor and payload corruption or tampering via checksums and hashes
-- preserve auditable operation history
+- preserve auditable operation history via tamper-evident audit trail
 
 ## Supported algorithms (MUST)
 
@@ -27,11 +26,9 @@ Snapshot integrity requires both layers to pass.
 
 ## Audit requirements
 Every mutating operation MUST append audit record with:
-- actor/holder
+- actor identity
 - operation type
 - target snapshot/worktree
-- fencing token
-- holder nonce/session
 - reason for dangerous operations
 
 ## Audit log format (MUST)
@@ -45,11 +42,9 @@ Format: JSON Lines (one JSON object per line, append-only).
 Each audit record MUST contain:
 - `event_id`: unique event identifier (UUID v4)
 - `timestamp`: ISO 8601 with timezone
-- `operation`: operation type (`snapshot`, `restore`, `lock_acquire`, `lock_steal`, `lock_release`, `gc_run`, `ref_create`, `ref_delete`, `worktree_create`, `worktree_remove`, `worktree_rename`)
-- `actor`: holder identity string
+- `operation`: operation type (`snapshot`, `restore`, `gc_run`, `ref_create`, `ref_delete`, `worktree_create`, `worktree_remove`, `worktree_rename`, `doctor_repair`)
+- `actor`: actor identity string
 - `target`: affected snapshot/worktree ID
-- `fencing_token`: current fencing token (nullable)
-- `session_id`: caller session ID
 - `reason`: mandatory for dangerous operations, nullable otherwise
 - `prev_hash`: SHA-256 hash of the previous audit record (empty string for first record)
 - `record_hash`: SHA-256 hash of this record (all fields except `record_hash` itself, serialized as canonical JSON)

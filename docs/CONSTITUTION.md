@@ -59,7 +59,7 @@ JVS strictly separates:
 
 | Layer | Responsibility |
 |-------|---------------|
-Control Plane (`.jvs/`) | All metadata: snapshots, descriptors, locks, worktree config |
+Control Plane (`.jvs/`) | All metadata: snapshots, descriptors, worktree config, audit trail |
 Data Plane (worktrees) | User workspace payload files only |
 
 Critical rules:

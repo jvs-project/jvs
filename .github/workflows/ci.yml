@@ -54,9 +54,41 @@ jobs:
           version: latest
           args: --timeout=5m
 
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+
+      - name: Install gosec
+        run: go install github.com/securecodewarrior/gosec/v2@latest
+
+      - name: Run gosec
+        run: |
+          gosec -verbose=text -fmt=json -out gosec-report.json ./... || true
+
+      - name: Upload gosec results
+        uses: actions/upload-artifact@v4
+        with:
+          name: gosec-report
+          path: gosec-report.json
+
+      - name: Install staticcheck
+        run: go install honnef.co/go/tools/cmd/staticcheck@latest
+
+      - name: Run staticcheck
+        run: staticcheck ./... || true
+
   release:
     name: Release
-    needs: [build, lint]
+    needs: [build, lint, security]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
 

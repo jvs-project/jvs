@@ -86,7 +86,7 @@ func (c *Collector) Plan() (*model.GCPlan, error) {
 
 // Run executes a GC plan.
 func (c *Collector) Run(planID string) error {
-	plan, err := c.loadPlan(planID)
+	plan, err := c.LoadPlan(planID)
 	if err != nil {
 		return fmt.Errorf("load plan: %w", err)
 	}
@@ -270,7 +270,8 @@ func (c *Collector) writePlan(plan *model.GCPlan) error {
 	return fsutil.AtomicWrite(path, data, 0644)
 }
 
-func (c *Collector) loadPlan(planID string) (*model.GCPlan, error) {
+// LoadPlan loads a GC plan by ID.
+func (c *Collector) LoadPlan(planID string) (*model.GCPlan, error) {
 	path := filepath.Join(c.repoRoot, ".jvs", "gc", planID+".json")
 	data, err := os.ReadFile(path)
 	if err != nil {

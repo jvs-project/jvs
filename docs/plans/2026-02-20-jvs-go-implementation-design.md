@@ -2,8 +2,11 @@
 
 **Date:** 2026-02-20
 **Spec version:** v6.5
+**Current version:** v7.0
 **Language:** Go 1.26
 **Module:** `github.com/jvs-project/jvs`
+
+> **Note:** This design document was written for v6.5 and contains references to the lock mechanism that was **removed in v6.7**. The lock-related sections (fencing tokens, holder nonces, session files, lock manager) are no longer applicable to the current implementation. This document is kept for historical reference.
 
 ---
 
