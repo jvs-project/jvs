@@ -14,6 +14,7 @@ import (
 
 var (
 	worktreeCreateFrom string
+	worktreeForce      bool
 )
 
 var worktreeCmd = &cobra.Command{
@@ -182,12 +183,31 @@ var worktreeRenameCmd = &cobra.Command{
 var worktreeRemoveCmd = &cobra.Command{
 	Use:   "remove <name>",
 	Short: "Remove a worktree",
-	Args:  cobra.ExactArgs(1),
+	Long: `Remove a worktree.
+
+The worktree payload and metadata are deleted, but all snapshots remain.
+Use --force to remove a worktree that is in detached state.`,
+	Args: cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		r := requireRepo()
 		name := args[0]
 
 		mgr := worktree.NewManager(r.Root)
+
+		// Check for detached state unless --force
+		if !worktreeForce {
+			cfg, err := mgr.Get(name)
+			if err == nil && cfg.IsDetached() {
+				fmtErr("worktree '%s' is in detached state", name)
+				fmt.Println()
+				fmt.Printf("Current position: %s\n", cfg.HeadSnapshotID)
+				fmt.Printf("Latest snapshot: %s\n", cfg.LatestSnapshotID)
+				fmt.Println()
+				fmt.Println("To remove anyway, use: jvs worktree remove --force " + name)
+				os.Exit(1)
+			}
+		}
+
 		if err := mgr.Remove(name); err != nil {
 			fmtErr("remove worktree: %v", err)
 			os.Exit(1)
@@ -337,6 +357,7 @@ Examples:
 
 func init() {
 	worktreeCreateCmd.Flags().StringVar(&worktreeCreateFrom, "from", "", "create from snapshot (ID, tag, or note prefix)")
+	worktreeRemoveCmd.Flags().BoolVarP(&worktreeForce, "force", "f", false, "force removal even if in detached state")
 	worktreeCmd.AddCommand(worktreeCreateCmd)
 	worktreeCmd.AddCommand(worktreeListCmd)
 	worktreeCmd.AddCommand(worktreePathCmd)

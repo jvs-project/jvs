@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"time"
 
 	"github.com/jvs-project/jvs/internal/audit"
 	"github.com/jvs-project/jvs/internal/engine"
@@ -81,11 +80,10 @@ func (r *Restorer) Restore(worktreeName string, snapshotID model.SnapshotID) err
 		return fmt.Errorf("swap in restored: %w", err)
 	}
 
-	// Step 3: Cleanup backup (async, non-blocking)
-	go func() {
-		time.Sleep(1 * time.Second)
-		os.RemoveAll(backupPath)
-	}()
+	// Step 3: Cleanup backup synchronously with error logging
+	if err := os.RemoveAll(backupPath); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: failed to cleanup backup %s: %v\n", backupPath, err)
+	}
 
 	// Step 4: Update head (NOT latest - this puts worktree in detached state)
 	if err := wtMgr.UpdateHead(worktreeName, snapshotID); err != nil {

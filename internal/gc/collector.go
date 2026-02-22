@@ -215,12 +215,14 @@ func (c *Collector) deleteSnapshot(snapshotID model.SnapshotID) error {
 	// Delete snapshot directory
 	snapshotDir := filepath.Join(c.repoRoot, ".jvs", "snapshots", string(snapshotID))
 	if err := os.RemoveAll(snapshotDir); err != nil {
-		return err
+		return fmt.Errorf("remove snapshot dir: %w", err)
 	}
 
-	// Delete descriptor
+	// Delete descriptor - log warning if fails but don't fail the operation
 	descriptorPath := filepath.Join(c.repoRoot, ".jvs", "descriptors", string(snapshotID)+".json")
-	os.Remove(descriptorPath)
+	if err := os.Remove(descriptorPath); err != nil && !os.IsNotExist(err) {
+		fmt.Fprintf(os.Stderr, "warning: failed to remove descriptor %s: %v\n", snapshotID, err)
+	}
 
 	return nil
 }
