@@ -11,6 +11,7 @@ import (
 	"github.com/jvs-project/jvs/internal/restore"
 	"github.com/jvs-project/jvs/internal/snapshot"
 	"github.com/jvs-project/jvs/internal/worktree"
+	"github.com/jvs-project/jvs/pkg/color"
 	"github.com/jvs-project/jvs/pkg/model"
 )
 
@@ -37,13 +38,11 @@ The snapshot-id can be:
   - A note prefix (fuzzy match)
   - "HEAD" to restore to the latest snapshot
 
-With --interactive, shows matching snapshots and prompts for confirmation.
-
 Examples:
-  jvs restore 1771589366482-abc12345   # Restore to specific snapshot
-  jvs restore v1.0                      # Restore by tag
-  jvs restore HEAD                      # Restore to latest (exit detached)
-  jvs restore --interactive 177         # Interactive fuzzy match`,
+  jvs restore 1771589abc              # Restore by short ID
+  jvs restore v1.0                     # Restore by tag
+  jvs restore HEAD                     # Return to latest (exit detached)
+  jvs restore -i 177                   # Interactive mode with fuzzy match`,
 	Args: cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		r, wtName := requireWorktree()
@@ -90,7 +89,8 @@ Examples:
 					os.Exit(1)
 				}
 				if len(matches) == 0 {
-					fmtErr("no snapshots found matching %q", snapshotArg)
+					// Show enhanced error message with suggestions
+					fmt.Fprintln(os.Stderr, formatSnapshotNotFoundError(snapshotArg, r.Root))
 					os.Exit(1)
 				}
 
@@ -129,13 +129,8 @@ Examples:
 					snapshotID = selected.Desc.SnapshotID
 				}
 			} else {
-				// Non-interactive: try single fuzzy match
-				desc, fuzzyErr := snapshot.FindOne(r.Root, snapshotArg)
-				if fuzzyErr != nil {
-					fmtErr("snapshot not found: %v (fuzzy search: %v)", err, fuzzyErr)
-					os.Exit(1)
-				}
-				snapshotID = desc.SnapshotID
+				// Non-interactive: use resolver with enhanced error messages
+				snapshotID = resolveSnapshotIDOrExit(r.Root, snapshotArg)
 			}
 		} else if restoreInteractive && !jsonOutput {
 			// Snapshot ID exists, but still confirm in interactive mode
@@ -170,13 +165,13 @@ Examples:
 				"detached":    isDetached,
 			})
 		} else {
-			fmt.Printf("\nRestored to snapshot %s\n", snapshotID)
+			fmt.Printf("\nRestored to snapshot %s\n", color.SnapshotID(snapshotID.String()))
 			if isDetached {
-				fmt.Println("Worktree is now in DETACHED state.")
-				fmt.Println("To continue working from here: jvs worktree fork <name>")
-				fmt.Println("To return to latest: jvs restore HEAD")
+				fmt.Println(color.Warning("Worktree is now in DETACHED state."))
+				fmt.Println(color.Dim("To continue working from here: jvs worktree fork <name>"))
+				fmt.Println(color.Dim("To return to latest: jvs restore HEAD"))
 			} else {
-				fmt.Println("Worktree is now at HEAD state.")
+				fmt.Println(color.Success("Worktree is now at HEAD state."))
 			}
 		}
 	},

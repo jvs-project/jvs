@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/jvs-project/jvs/internal/repo"
+	"github.com/jvs-project/jvs/pkg/color"
 )
 
 // requireRepo discovers the repo from CWD and returns it, or exits with error.
@@ -16,7 +17,8 @@ func requireRepo() *repo.Repo {
 	}
 	r, err := repo.Discover(cwd)
 	if err != nil {
-		fmtErr("not a JVS repository (or any parent): %v", err)
+		// Enhanced error message with suggestion
+		fmt.Fprintln(os.Stderr, formatNotInRepositoryError())
 		os.Exit(1)
 	}
 	return r
@@ -42,5 +44,37 @@ func requireWorktree() (*repo.Repo, string) {
 }
 
 func fmtErr(format string, args ...any) {
-	fmt.Fprintf(os.Stderr, "jvs: "+format+"\n", args...)
+	// Colorize the error prefix
+	prefix := "jvs: "
+	if color.Enabled() {
+		prefix = color.Error("jvs:") + " "
+	}
+	fmt.Fprintf(os.Stderr, prefix+format+"\n", args...)
+}
+
+// fmtSuccess prints a success message to stdout.
+func fmtSuccess(format string, args ...any) {
+	msg := fmt.Sprintf(format, args...)
+	if color.Enabled() {
+		msg = color.Success(msg)
+	}
+	fmt.Println(msg)
+}
+
+// fmtWarning prints a warning message to stderr.
+func fmtWarning(format string, args ...any) {
+	msg := fmt.Sprintf(format, args...)
+	if color.Enabled() {
+		msg = color.Warning(msg)
+	}
+	fmt.Fprintln(os.Stderr, msg)
+}
+
+// fmtInfo prints an informational message to stdout.
+func fmtInfo(format string, args ...any) {
+	msg := fmt.Sprintf(format, args...)
+	if color.Enabled() {
+		msg = color.Info(msg)
+	}
+	fmt.Println(msg)
 }

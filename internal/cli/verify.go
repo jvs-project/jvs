@@ -20,7 +20,11 @@ var verifyCmd = &cobra.Command{
 	Long: `Verify snapshot integrity.
 
 Checks descriptor checksum and optionally payload hash.
-Use --all to verify all snapshots.`,
+
+Examples:
+  jvs verify                    # Verify all snapshots
+  jvs verify 1771589abc         # Verify specific snapshot
+  jvs verify --all              # Verify all snapshots with payload hash`,
 	Args: cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		r := requireRepo()

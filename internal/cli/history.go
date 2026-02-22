@@ -9,6 +9,7 @@ import (
 
 	"github.com/jvs-project/jvs/internal/snapshot"
 	"github.com/jvs-project/jvs/internal/worktree"
+	"github.com/jvs-project/jvs/pkg/color"
 	"github.com/jvs-project/jvs/pkg/model"
 )
 
@@ -25,11 +26,18 @@ var historyCmd = &cobra.Command{
 	Long: `Show snapshot history for the current worktree.
 
 Traverses the lineage chain from head backwards.
-Use --all to show all snapshots in the repository, not just the current worktree's lineage.
+Use --all to show all snapshots in the repository.
 
 The output shows:
   - [HEAD] marker on the latest snapshot in the lineage
-  - Current position indicator (you are here)`,
+  - Current position indicator (you are here)
+
+Examples:
+  jvs history                    # Show current worktree history
+  jvs history -n 10              # Show last 10 snapshots
+  jvs history --grep "fix"       # Filter by note substring
+  jvs history --tag v1.0         # Filter by tag
+  jvs history --all              # Show all snapshots in repo`,
 	Run: func(cmd *cobra.Command, args []string) {
 		r, wtName := requireWorktree()
 
@@ -110,11 +118,15 @@ The output shows:
 		for _, desc := range history {
 			note := desc.Note
 			if note == "" {
-				note = "(no note)"
+				note = color.Dim("(no note)")
 			}
 			tagsStr := ""
 			if len(desc.Tags) > 0 {
-				tagsStr = "  [" + strings.Join(desc.Tags, ",") + "]"
+				tagColors := make([]string, len(desc.Tags))
+				for i, tag := range desc.Tags {
+					tagColors[i] = color.Tag(tag)
+				}
+				tagsStr = "  [" + strings.Join(tagColors, ",") + "]"
 			}
 
 			// Build marker string
@@ -122,14 +134,14 @@ The output shows:
 			if !historyAll {
 				// Mark HEAD (latest in lineage)
 				if desc.SnapshotID == latestSnapshotID {
-					marker = "  [HEAD]"
+					marker = "  " + color.Header("[HEAD]")
 				}
 			}
 
-			// Print the line
+			// Print the line with colored snapshot ID
 			fmt.Printf("%s  %s  %s%s%s\n",
-				desc.SnapshotID.ShortID(),
-				desc.CreatedAt.Format("2006-01-02 15:04"),
+				color.SnapshotID(desc.SnapshotID.ShortID()),
+				color.Dim(desc.CreatedAt.Format("2006-01-02 15:04")),
 				note,
 				tagsStr,
 				marker,
@@ -138,9 +150,9 @@ The output shows:
 			// Show "you are here" marker after current position
 			if desc.SnapshotID == currentSnapshotID {
 				if isDetached {
-					fmt.Println("◄── you are here (detached)")
+					fmt.Println(color.Dim("◄── you are here (detached)"))
 				} else if !historyAll {
-					fmt.Println("◄── you are here (HEAD)")
+					fmt.Println(color.Success("◄── you are here (HEAD)"))
 				}
 			}
 		}

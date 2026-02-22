@@ -1,14 +1,17 @@
 package cli
 
 import (
+	"bufio"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 
 	"github.com/jvs-project/jvs/internal/compression"
 	"github.com/jvs-project/jvs/internal/snapshot"
 	"github.com/jvs-project/jvs/internal/worktree"
+	"github.com/jvs-project/jvs/pkg/color"
 	"github.com/jvs-project/jvs/pkg/config"
 	"github.com/jvs-project/jvs/pkg/model"
 	"github.com/jvs-project/jvs/pkg/pathutil"
@@ -18,6 +21,7 @@ var (
 	snapshotTags        []string
 	snapshotPaths       []string
 	snapshotCompression string
+	snapshotNoteFile    string
 )
 
 var snapshotCmd = &cobra.Command{
@@ -26,14 +30,25 @@ var snapshotCmd = &cobra.Command{
 	Long: `Create a snapshot of the current worktree.
 
 Captures the current state of the worktree at a point in time.
-Use --tag to attach one or more tags to the snapshot.
 
-For partial snapshots of specific paths, use -- followed by paths:
-  jvs snapshot "models update" -- models/ data/
+Examples:
+  # Basic snapshot with note
+  jvs snapshot "Before refactoring"
 
-Compression can be enabled with --compress:
+  # Snapshot with tags
+  jvs snapshot "v1.0 release" --tag v1.0 --tag release
+
+  # Partial snapshot of specific paths
+  jvs snapshot "Assets only" -- paths/Assets/
+
+  # Compressed snapshot
   jvs snapshot "checkpoint" --compress fast
-  jvs snapshot "archive" --compress max
+
+  # Multi-line note via stdin
+  jvs snapshot - < <<EOF
+  ML Experiment: ResNet50 v2
+  Result: 92.3% accuracy
+  EOF
 
 Compression levels: none, fast, default, max
 
@@ -65,9 +80,20 @@ to create a new worktree from the current position first.`,
 			os.Exit(1)
 		}
 
-		// Get note from args
+		// Get note from args, stdin, or file
 		var note string
-		if len(args) > 0 {
+		if len(args) > 0 && args[0] == "-" {
+			// Read from stdin
+			note = readNoteFromStdin()
+		} else if snapshotNoteFile != "" {
+			// Read from file
+			content, err := os.ReadFile(snapshotNoteFile)
+			if err != nil {
+				fmtErr("read note file: %v", err)
+				os.Exit(1)
+			}
+			note = string(content)
+		} else if len(args) > 0 {
 			note = args[0]
 		}
 
@@ -133,20 +159,47 @@ to create a new worktree from the current position first.`,
 			outputJSON(desc)
 		} else {
 			if len(snapshotPaths) > 0 {
-				fmt.Printf("Created partial snapshot %s (%d paths)\n", desc.SnapshotID, len(snapshotPaths))
+				fmt.Printf("Created partial snapshot %s (%d paths)\n", color.SnapshotID(desc.SnapshotID.String()), len(snapshotPaths))
 			} else {
-				fmt.Printf("Created snapshot %s\n", desc.SnapshotID)
+				fmt.Printf("Created snapshot %s\n", color.SnapshotID(desc.SnapshotID.String()))
 			}
 			if desc.Compression != nil {
 				fmt.Printf("  (compressed: %s level %d)\n", desc.Compression.Type, desc.Compression.Level)
 			}
+			if len(allTags) > 0 {
+				tagColors := make([]string, len(allTags))
+				for i, tag := range allTags {
+					tagColors[i] = color.Tag(tag)
+				}
+				fmt.Printf("  Tags: %s\n", strings.Join(tagColors, ", "))
+			}
 		}
 	},
+}
+
+// readNoteFromStdin reads a multi-line note from stdin.
+// Reads until EOF and returns the trimmed content.
+func readNoteFromStdin() string {
+	var lines []string
+	scanner := bufio.NewScanner(os.Stdin)
+	for scanner.Scan() {
+		lines = append(lines, scanner.Text())
+	}
+	if err := scanner.Err(); err != nil {
+		fmtErr("read stdin: %v", err)
+		os.Exit(1)
+	}
+	// Trim trailing whitespace while preserving internal newlines
+	note := strings.TrimRight(strings.Join(lines, "\n"), "\n\r ")
+	// Also trim leading whitespace
+	note = strings.TrimLeft(note, "\n\r ")
+	return note
 }
 
 func init() {
 	snapshotCmd.Flags().StringSliceVar(&snapshotTags, "tag", []string{}, "tag for this snapshot (can be repeated)")
 	snapshotCmd.Flags().StringSliceVar(&snapshotPaths, "paths", []string{}, "paths to include in partial snapshot")
 	snapshotCmd.Flags().StringVar(&snapshotCompression, "compress", "", "compression level (none, fast, default, max)")
+	snapshotCmd.Flags().StringVarP(&snapshotNoteFile, "file", "F", "", "read note from file")
 	rootCmd.AddCommand(snapshotCmd)
 }

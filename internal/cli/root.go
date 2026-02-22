@@ -7,6 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/jvs-project/jvs/pkg/color"
 	"github.com/jvs-project/jvs/pkg/logging"
 	"github.com/jvs-project/jvs/pkg/progress"
 )
@@ -15,6 +16,7 @@ var (
 	jsonOutput   bool
 	debugOutput  bool
 	noProgress   bool
+	noColor      bool
 	rootCmd      = &cobra.Command{
 		Use:   "jvs",
 		Short: "JVS - Juicy Versioned Workspaces",
@@ -24,6 +26,9 @@ and exclusive-mode worktree isolation.`,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		PersistentPreRun: func(cmd *cobra.Command, args []string) {
+			// Configure color output first (before any output)
+			color.Init(noColor)
+
 			// Configure logging based on debug flag
 			if debugOutput {
 				logging.SetGlobal(logging.NewLogger(logging.LevelDebug))
@@ -36,6 +41,7 @@ func init() {
 	rootCmd.PersistentFlags().BoolVar(&jsonOutput, "json", false, "output in JSON format")
 	rootCmd.PersistentFlags().BoolVar(&debugOutput, "debug", false, "enable debug logging")
 	rootCmd.PersistentFlags().BoolVar(&noProgress, "no-progress", false, "disable progress bars")
+	rootCmd.PersistentFlags().BoolVar(&noColor, "no-color", false, "disable colored output (also respects NO_COLOR env var)")
 }
 
 // Execute runs the root command.

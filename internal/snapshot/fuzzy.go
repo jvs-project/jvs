@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/jvs-project/jvs/pkg/color"
 	"github.com/jvs-project/jvs/pkg/model"
 )
 
@@ -116,30 +117,34 @@ func sortMatches(matches []*MatchScore) {
 // FormatMatchList formats a list of matches for interactive display.
 func FormatMatchList(matches []*MatchScore) string {
 	var sb strings.Builder
-	sb.WriteString("Matching snapshots:\n")
+	sb.WriteString(color.Header("Matching snapshots:\n"))
 	sb.WriteString("\n")
 
 	for i, m := range matches {
 		prefix := "  "
 		if i == 0 {
-			prefix = "> " // Indicate best match
+			prefix = color.Success("> ") // Indicate best match
 		}
 
 		note := m.Desc.Note
 		if note == "" {
-			note = "(no note)"
+			note = color.Dim("(no note)")
 		}
 
 		tags := ""
 		if len(m.Desc.Tags) > 0 {
-			tags = " [" + strings.Join(m.Desc.Tags, ",") + "]"
+			tagColors := make([]string, len(m.Desc.Tags))
+			for i, tag := range m.Desc.Tags {
+				tagColors[i] = color.Tag(tag)
+			}
+			tags = " [" + strings.Join(tagColors, ",") + "]"
 		}
 
 		sb.WriteString(fmt.Sprintf("%s%d. %s %s%s\n",
-			prefix, i+1, m.Desc.SnapshotID.ShortID(), note, tags))
+			prefix, i+1, color.SnapshotID(m.Desc.SnapshotID.ShortID()), note, tags))
 		sb.WriteString(fmt.Sprintf("   %s by %s\n",
-			m.Desc.CreatedAt.Format("2006-01-02 15:04"),
-			m.MatchType))
+			color.Dim(m.Desc.CreatedAt.Format("2006-01-02 15:04")),
+			color.Info(m.MatchType)))
 	}
 
 	return sb.String()

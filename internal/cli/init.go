@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/jvs-project/jvs/internal/repo"
+	"github.com/jvs-project/jvs/pkg/color"
 	"github.com/jvs-project/jvs/pkg/pathutil"
 )
 
@@ -44,8 +45,8 @@ This creates:
 				"repo_id":       r.RepoID,
 			})
 		} else {
-			fmt.Printf("Initialized JVS repository in %s\n", repoPath)
-			fmt.Printf("  Main worktree: %s/main\n", repoPath)
+			fmt.Printf("Initialized JVS repository in %s\n", color.Success(repoPath))
+			fmt.Printf("  Main worktree: %s/main\n", color.Highlight(repoPath))
 		}
 	},
 }

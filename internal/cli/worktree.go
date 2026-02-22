@@ -9,6 +9,7 @@ import (
 	"github.com/jvs-project/jvs/internal/engine"
 	"github.com/jvs-project/jvs/internal/snapshot"
 	"github.com/jvs-project/jvs/internal/worktree"
+	"github.com/jvs-project/jvs/pkg/color"
 	"github.com/jvs-project/jvs/pkg/model"
 )
 
@@ -44,11 +45,7 @@ Examples:
 
 		// If --from is specified, create from snapshot
 		if worktreeCreateFrom != "" {
-			snapshotID, err := resolveSnapshotID(r.Root, worktreeCreateFrom)
-			if err != nil {
-				fmtErr("resolve snapshot: %v", err)
-				os.Exit(1)
-			}
+			snapshotID := resolveSnapshotIDOrExit(r.Root, worktreeCreateFrom)
 
 			// Verify snapshot exists and is valid
 			if err := snapshot.VerifySnapshot(r.Root, snapshotID, false); err != nil {
@@ -71,8 +68,8 @@ Examples:
 			if jsonOutput {
 				outputJSON(cfg)
 			} else {
-				fmt.Printf("Created worktree '%s' from snapshot %s\n", name, snapshotID)
-				fmt.Printf("Path: %s\n", mgr.Path(name))
+				fmt.Printf("Created worktree '%s' from snapshot %s\n", color.Success(name), color.SnapshotID(snapshotID.String()))
+				fmt.Printf("Path: %s\n", color.Dim(mgr.Path(name)))
 			}
 			return
 		}
@@ -87,12 +84,13 @@ Examples:
 		if jsonOutput {
 			outputJSON(cfg)
 		} else {
-			fmt.Printf("Created worktree '%s' at %s\n", name, mgr.Path(name))
+			fmt.Printf("Created worktree '%s' at %s\n", color.Success(name), color.Dim(mgr.Path(name)))
 		}
 	},
 }
 
 // resolveSnapshotID resolves a snapshot reference to a full snapshot ID.
+// Returns an error if the snapshot cannot be resolved.
 func resolveSnapshotID(repoRoot, ref string) (model.SnapshotID, error) {
 	// Try exact match first
 	testID := model.SnapshotID(ref)
@@ -109,9 +107,24 @@ func resolveSnapshotID(repoRoot, ref string) (model.SnapshotID, error) {
 	return desc.SnapshotID, nil
 }
 
+// resolveSnapshotIDOrExit resolves a snapshot reference to a full snapshot ID.
+// Prints enhanced error messages and exits on failure (for CLI use).
+func resolveSnapshotIDOrExit(repoRoot, ref string) model.SnapshotID {
+	id, err := resolveSnapshotID(repoRoot, ref)
+	if err != nil {
+		// Print enhanced error message with suggestions
+		fmt.Fprintln(os.Stderr, formatSnapshotNotFoundError(ref, repoRoot))
+		os.Exit(1)
+	}
+	return id
+}
+
 var worktreeListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List all worktrees",
+	Long: `List all worktrees in the repository.
+
+Shows each worktree name and its current HEAD snapshot.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		r := requireRepo()
 
@@ -130,9 +143,11 @@ var worktreeListCmd = &cobra.Command{
 		for _, cfg := range list {
 			head := string(cfg.HeadSnapshotID)
 			if head == "" {
-				head = "(none)"
+				head = color.Dim("(none)")
 			} else if len(head) > 16 {
-				head = head[:16] + "..."
+				head = color.SnapshotID(head[:16]) + color.Dim("...")
+			} else {
+				head = color.SnapshotID(head)
 			}
 			fmt.Printf("%-20s  %s\n", cfg.Name, head)
 		}
@@ -142,6 +157,13 @@ var worktreeListCmd = &cobra.Command{
 var worktreePathCmd = &cobra.Command{
 	Use:   "path [<name>]",
 	Short: "Print the path to a worktree",
+	Long: `Print the path to a worktree.
+
+If no name is specified, prints the path of the current worktree.
+
+Examples:
+  jvs worktree path              # Path of current worktree
+  jvs worktree path main         # Path of named worktree`,
 	Args:  cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		r := requireRepo()
@@ -154,6 +176,17 @@ var worktreePathCmd = &cobra.Command{
 		}
 
 		mgr := worktree.NewManager(r.Root)
+
+		// Check if worktree exists for better error message
+		if name != "" {
+			_, err := mgr.Get(name)
+			if err != nil {
+				// Worktree doesn't exist - show helpful error
+				fmt.Fprintln(os.Stderr, formatWorktreeNotFoundError(name, r.Root))
+				os.Exit(1)
+			}
+		}
+
 		path := mgr.Path(name)
 		fmt.Println(path)
 	},
@@ -162,6 +195,12 @@ var worktreePathCmd = &cobra.Command{
 var worktreeRenameCmd = &cobra.Command{
 	Use:   "rename <old> <new>",
 	Short: "Rename a worktree",
+	Long: `Rename a worktree.
+
+Changes the worktree name without affecting its content or snapshots.
+
+Examples:
+  jvs worktree rename feature-1 feature-branch`,
 	Args:  cobra.ExactArgs(2),
 	Run: func(cmd *cobra.Command, args []string) {
 		r := requireRepo()
@@ -169,6 +208,15 @@ var worktreeRenameCmd = &cobra.Command{
 		newName := args[1]
 
 		mgr := worktree.NewManager(r.Root)
+
+		// Check if source worktree exists for better error message
+		_, err := mgr.Get(oldName)
+		if err != nil {
+			// Worktree doesn't exist - show helpful error
+			fmt.Fprintln(os.Stderr, formatWorktreeNotFoundError(oldName, r.Root))
+			os.Exit(1)
+		}
+
 		if err := mgr.Rename(oldName, newName); err != nil {
 			fmtErr("rename worktree: %v", err)
 			os.Exit(1)
@@ -186,13 +234,25 @@ var worktreeRemoveCmd = &cobra.Command{
 	Long: `Remove a worktree.
 
 The worktree payload and metadata are deleted, but all snapshots remain.
-Use --force to remove a worktree that is in detached state.`,
+Use --force to remove a worktree that is in detached state.
+
+Examples:
+  jvs worktree remove feature-x      # Remove worktree
+  jvs worktree remove --force old    # Force remove detached worktree`,
 	Args: cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		r := requireRepo()
 		name := args[0]
 
 		mgr := worktree.NewManager(r.Root)
+
+		// First check if worktree exists for better error message
+		_, err := mgr.Get(name)
+		if err != nil {
+			// Worktree doesn't exist - show helpful error
+			fmt.Fprintln(os.Stderr, formatWorktreeNotFoundError(name, r.Root))
+			os.Exit(1)
+		}
 
 		// Check for detached state unless --force
 		if !worktreeForce {
@@ -268,36 +328,27 @@ Examples:
 			// One arg: could be snapshot-id or name
 			// Try to interpret as snapshot-id first
 			arg := args[0]
-			testID := model.SnapshotID(arg)
 
-			// Check if it looks like a valid snapshot ID or can be resolved
-			_, err := snapshot.LoadDescriptor(r.Root, testID)
-			if err != nil {
-				// Try fuzzy match
-				desc, fuzzyErr := snapshot.FindOne(r.Root, arg)
-				if fuzzyErr == nil {
-					// It's a snapshot reference
-					snapshotID = desc.SnapshotID
-					name = "" // auto-generate
-				} else {
-					// Not a snapshot, treat as name, use current position
-					mgr := worktree.NewManager(r.Root)
-					cfg, err := mgr.Get(wtName)
-					if err != nil {
-						fmtErr("get current worktree: %v", err)
-						os.Exit(1)
-					}
-					if cfg.HeadSnapshotID == "" {
-						fmtErr("current worktree has no snapshots to fork from")
-						os.Exit(1)
-					}
-					snapshotID = cfg.HeadSnapshotID
-					name = arg
-				}
-			} else {
-				// Valid snapshot ID
-				snapshotID = testID
+			// Try to resolve as snapshot
+			id, err := resolveSnapshotID(r.Root, arg)
+			if err == nil {
+				// Successfully resolved as snapshot
+				snapshotID = id
 				name = "" // auto-generate
+			} else {
+				// Not a snapshot, treat as name, use current position
+				mgr := worktree.NewManager(r.Root)
+				cfg, err := mgr.Get(wtName)
+				if err != nil {
+					fmtErr("get current worktree: %v", err)
+					os.Exit(1)
+				}
+				if cfg.HeadSnapshotID == "" {
+					fmtErr("current worktree has no snapshots to fork from")
+					os.Exit(1)
+				}
+				snapshotID = cfg.HeadSnapshotID
+				name = arg
 			}
 
 		case 2:
@@ -305,19 +356,7 @@ Examples:
 			snapshotArg := args[0]
 			name = args[1]
 
-			testID := model.SnapshotID(snapshotArg)
-			_, err := snapshot.LoadDescriptor(r.Root, testID)
-			if err != nil {
-				// Try fuzzy match
-				desc, fuzzyErr := snapshot.FindOne(r.Root, snapshotArg)
-				if fuzzyErr != nil {
-					fmtErr("snapshot not found: %v (fuzzy search: %v)", err, fuzzyErr)
-					os.Exit(1)
-				}
-				snapshotID = desc.SnapshotID
-			} else {
-				snapshotID = testID
-			}
+			snapshotID = resolveSnapshotIDOrExit(r.Root, snapshotArg)
 		}
 
 		// Auto-generate name if not provided
@@ -348,9 +387,9 @@ Examples:
 		if jsonOutput {
 			outputJSON(cfg)
 		} else {
-			fmt.Printf("Created worktree '%s' from snapshot %s\n", name, snapshotID)
-			fmt.Printf("Path: %s\n", mgr.Path(name))
-			fmt.Println("Worktree is at HEAD state - you can create snapshots.")
+			fmt.Printf("Created worktree '%s' from snapshot %s\n", color.Success(name), color.SnapshotID(snapshotID.String()))
+			fmt.Printf("Path: %s\n", color.Dim(mgr.Path(name)))
+			fmt.Println(color.Success("Worktree is at HEAD state - you can create snapshots."))
 		}
 	},
 }
