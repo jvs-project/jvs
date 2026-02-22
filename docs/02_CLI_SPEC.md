@@ -1,4 +1,4 @@
-# CLI Spec (v6.7)
+# CLI Spec (v7.0)
 
 This spec defines the JVS command contract.
 
@@ -80,17 +80,26 @@ Show snapshot history.
 - `--all` shows all snapshots (not just current worktree lineage)
 
 ## Restore commands
-### `jvs restore <snapshot-id> [--name <worktree>] [--json]`
-Safe mode: create a new worktree.
+### `jvs restore <snapshot-id> [--json]`
+Inplace restore: restore current worktree to the specified snapshot.
 - `<snapshot-id>` can be a full ID, short ID prefix, tag name, or note prefix (fuzzy match)
+- After restore, worktree enters **detached state** (unless restoring to HEAD)
+- In detached state, cannot create new snapshots
 
-### `jvs restore --latest-tag <tag> [--name <worktree>] [--json]`
-Safe mode: restore the most recent snapshot with the given tag.
+### `jvs restore HEAD [--json]`
+Return to latest state: restore worktree to its latest snapshot.
+- Exits detached state
+- Worktree returns to HEAD state where snapshots can be created
 
-### `jvs restore <snapshot-id> --inplace --force --reason <text> [--json]`
-Danger mode: overwrite current payload.
-- `--force` is mandatory to confirm the dangerous operation.
-- `--reason` is mandatory for audit trail.
+## Fork commands
+### `jvs worktree fork <name> [--json]`
+Fork from current position: create a new worktree from the current snapshot.
+- Uses current worktree's `head_snapshot_id` as the base
+
+### `jvs worktree fork <snapshot-id> <name> [--json]`
+Fork from snapshot: create a new worktree from a specific snapshot.
+- `<snapshot-id>` can be a full ID, short ID prefix, tag name, or note prefix (fuzzy match)
+- New worktree starts at HEAD state (can create snapshots)
 
 ## GC commands
 ### `jvs gc plan [--policy <name>] [--json]`

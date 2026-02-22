@@ -1,4 +1,4 @@
-# Snapshot Engine Spec (v6.7)
+# Snapshot Engine Spec (v7.0)
 
 JVS provides one snapshot command with pluggable engines.
 

@@ -26,7 +26,7 @@ JVS is a **snapshot-first, filesystem-native versioning layer** (not a Git repla
 | `03_WORKTREE_SPEC.md` | Worktree lifecycle, exclusive isolation (shared deferred to v1.x) |
 | `04_SNAPSHOT_SCOPE_AND_LINEAGE_SPEC.md` | Snapshot identity, descriptor schema, lineage chain |
 | `05_SNAPSHOT_ENGINE_SPEC.md` | Engine selection (juicefs-clone/reflink-copy/copy), READY protocol, payload hash |
-| `06_RESTORE_SPEC.md` | Safe default restore vs dangerous in-place restore |
+| `06_RESTORE_SPEC.md` | Restore command with detached state model |
 | `07_LOCKING_AND_CONSISTENCY_SPEC.md` | SWMR, fencing tokens, clock skew handling |
 | `14_TRACEABILITY_MATRIX.md` | Maps product promises to normative specs to conformance tests |
 
@@ -37,7 +37,7 @@ From CONSTITUTION.md - these are **immutable** without a major version RFC:
 1. **Snapshot First, Not Diff First**: No staging area, no patch/diff store, no blob graph
 2. **Filesystem as Source of Truth**: No virtualization, no shadow working trees
 3. **`.jvs/` MUST NEVER be in snapshot payload**: Payload roots must contain zero control-plane artifacts
-4. **Safe-by-default restore**: `jvs restore <id>` creates new worktree; `--inplace --force` required for overwrite
+4. **Detached state model**: `jvs restore <id>` restores inplace and enters detached state; use `jvs worktree fork` to create branches
 5. **Exclusive mode only (v0.x)**: `shared` mode deferred to v1.x
 6. **Strong verification by default**: Checksum + payload hash (signing deferred to v1.x)
 
@@ -69,10 +69,11 @@ Do not propose features for:
 
 Key commands for reference:
 - `jvs init <name>` - Create repository with `.jvs/` and `main/`
-- `jvs snapshot [note] [--consistency quiesced|best_effort]` - Create snapshot
-- `jvs restore <id>` - Safe restore (new worktree)
-- `jvs restore <id> --inplace --force --reason <text>` - Dangerous in-place restore
-- `jvs lock acquire|renew|release|status` - Lock management
+- `jvs snapshot [note] [--tag <tag>]` - Create snapshot
+- `jvs restore <id>` - Restore worktree to snapshot (inplace, may enter detached state)
+- `jvs restore HEAD` - Return to latest state
+- `jvs worktree fork <name>` - Fork from current position
+- `jvs worktree fork <id> <name>` - Fork from snapshot
 - `jvs verify [--all]` - Strong verification (checksum + payload hash)
 - `jvs doctor --strict` - Validate layout, lineage, runtime state
 - `jvs gc plan` / `jvs gc run --plan-id <id>` - Two-phase garbage collection

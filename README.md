@@ -16,10 +16,10 @@ JVS versions full workspaces as snapshots and provides navigable, verifiable, ta
 - No distributed locking (local-first)
 - Project Constitution: See /docs/CONSTITUTION.md before proposing new features.
 
-## Core guarantees (v6.7)
-- Safe default restore: `jvs restore <id>` creates a new worktree
+## Core guarantees (v7.0)
+- Detached state model: restore to historical snapshots, fork to create branches
 - Two-layer integrity: descriptor checksum + payload hash (SHA-256)
-- Simple workflow: snapshot and restore without lock management
+- Simple workflow: snapshot, restore, and fork
 
 ## Installation
 
@@ -53,9 +53,10 @@ jvs history
 | `jvs init <name>` | Initialize a new repository |
 | `jvs snapshot [note] [--tag <tag>]` | Create a snapshot |
 | `jvs history [--tag <tag>] [--grep <pattern>]` | Show snapshot history |
-| `jvs restore <id>` | Restore to new worktree (safe) |
-| `jvs restore --latest-tag <tag>` | Restore latest snapshot with tag |
-| `jvs restore <id> --inplace --force --reason <text>` | Overwrite current worktree |
+| `jvs restore <id>` | Restore worktree to snapshot (inplace) |
+| `jvs restore HEAD` | Return to latest state |
+| `jvs worktree fork [name]` | Fork from current position |
+| `jvs worktree fork <id> <name>` | Fork from snapshot |
 | `jvs worktree create/list/remove` | Manage worktrees |
 | `jvs verify --all` | Verify all snapshots |
 | `jvs doctor` | Check repository health |
@@ -110,4 +111,4 @@ jvs verify --all
 Use `juicefs sync` and exclude runtime state (active `.jvs/intents`).
 See `docs/18_MIGRATION_AND_BACKUP.md`.
 
-**Spec version:** v6.7 (2026-02-20)
+**Spec version:** v7.0 (2026-02-22)

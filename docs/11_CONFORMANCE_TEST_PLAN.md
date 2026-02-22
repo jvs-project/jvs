@@ -1,4 +1,4 @@
-# Conformance Test Plan (v6.7)
+# Conformance Test Plan (v7.0)
 
 ## Purpose
 Define mandatory spec tests that gate release quality.
@@ -28,8 +28,10 @@ Define mandatory spec tests that gate release quality.
 18. `jvs init` creates `.jvs/worktrees/main/config.json` with valid schema
 19. `jvs worktree remove` deletes both payload directory and `.jvs/worktrees/<name>/` metadata
 20. migration sync including `.jvs/worktrees/` preserves worktree metadata at destination
-21. in-place restore requires `--force` flag
-22. in-place restore requires `--reason` flag
+21. restore to historical snapshot enters detached state
+22. restore HEAD exits detached state
+23. snapshot fails in detached state
+24. fork creates new worktree from snapshot
 
 ## Acceptance
 - release profile requires 100% pass

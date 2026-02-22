@@ -1,4 +1,4 @@
-# Migration & Backup (v6.7)
+# Migration & Backup (v7.0)
 
 JVS does not provide remote replication. Use JuiceFS replication tools.
 

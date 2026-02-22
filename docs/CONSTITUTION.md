@@ -212,14 +212,20 @@ Key Principle:
 
 # 7. Safety and Determinism Principles（安全与确定性）
 
-## 7.1 Safe by Default Restore
-Default restore MUST:
-- Create a new worktree
-- Never overwrite current workspace silently
+## 7.1 Detached State Model
+Restore always operates inplace:
+- `jvs restore <id>` restores worktree to the specified snapshot
+- After restore, worktree enters **detached state** if not at HEAD
+- In detached state, cannot create new snapshots (must fork first)
 
-Destructive operations require:
+Return to HEAD state:
 ```
---inplace --force
+jvs restore HEAD
+```
+
+Create branch from historical point:
+```
+jvs worktree fork <snapshot-id> <new-worktree-name>
 ```
 
 ---

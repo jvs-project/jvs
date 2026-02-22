@@ -1,4 +1,4 @@
-# Repository Layout Spec (v6.7)
+# Repository Layout Spec (v7.0)
 
 ## Definitions
 - Volume: mounted filesystem (JuiceFS preferred)

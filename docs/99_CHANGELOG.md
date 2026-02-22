@@ -1,5 +1,35 @@
 # Changelog
 
+## v7.0 — 2026-02-22
+
+### Redesigned restore command with detached state model
+- **Single behavior restore**: `jvs restore <id>` now always operates inplace (no more --inplace/--force/--reason flags)
+- **Detached state**: After restoring to a historical snapshot, the worktree enters "detached state" where snapshots cannot be created
+- **Fork command**: `jvs worktree fork` creates a new worktree from current or specified snapshot (replaces old "safe restore" behavior)
+- **Restore HEAD**: `jvs restore HEAD` returns the worktree to the latest snapshot (exits detached state)
+- **History markers**: `jvs history` now shows [HEAD] marker and "you are here" indicator
+
+### Worktree config changes
+- Added `latest_snapshot_id` field to worktree config
+- `IsDetached()` returns true when `head_snapshot_id != latest_snapshot_id`
+- `CanSnapshot()` returns true only when not detached and has at least one snapshot
+
+### Migration from v6.x
+In v6.x, `restore` had two modes:
+- Default: created new worktree (`SafeRestore`)
+- `--inplace --force --reason`: overwrote current worktree
+
+In v7.0:
+- `restore` always does inplace restore
+- Use `worktree fork` to create new worktree from snapshot
+- No more `--inplace`, `--force`, `--reason` flags
+
+### Affected files
+- Modified: `internal/cli/restore.go`, `internal/cli/snapshot.go`, `internal/cli/worktree.go`, `internal/cli/history.go`, `internal/restore/restorer.go`, `internal/worktree/manager.go`, `pkg/model/worktree.go`
+- Updated tests: `internal/restore/restorer_test.go`, `test/conformance/fencing_test.go`
+- Updated docs: `06_RESTORE_SPEC.md`, `02_CLI_SPEC.md`, `11_CONFORMANCE_TEST_PLAN.md`, `CONSTITUTION.md`, `README.md`, `CLAUDE.md`
+- Added: `docs/20_USER_SCENARIOS.md`
+
 ## v6.7 — 2026-02-20
 
 ### Removed lock mechanism entirely

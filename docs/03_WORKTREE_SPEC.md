@@ -1,4 +1,4 @@
-# Worktree Spec (v6.7)
+# Worktree Spec (v7.0)
 
 ## Worktree identity
 Worktree metadata is stored centrally under the control plane:

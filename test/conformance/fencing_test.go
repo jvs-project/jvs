@@ -7,23 +7,8 @@ import (
 	"testing"
 )
 
-// Test 26: Inplace restore requires force flag
-func TestRestore_InplaceRequiresForce(t *testing.T) {
-	repoPath, _ := initTestRepo(t)
-
-	// Create snapshot
-	runJVSInRepo(t, repoPath, "snapshot", "v1")
-
-	// Get snapshot ID
-	stdout, _, _ := runJVSInRepo(t, repoPath, "history", "--json")
-	snapshotID := extractSnapshotID(stdout)
-
-	// Try inplace restore without force
-	_, _, code := runJVSInRepo(t, repoPath, "restore", snapshotID, "--inplace", "--reason", "test")
-	if code == 0 {
-		t.Error("inplace restore should require --force")
-	}
-}
+// Test 26: Restore to historical snapshot enters detached state
+// (Covered by TestRestore_Inplace in restore_test.go)
 
 // Test 27: History limit works
 func TestHistory_Limit(t *testing.T) {

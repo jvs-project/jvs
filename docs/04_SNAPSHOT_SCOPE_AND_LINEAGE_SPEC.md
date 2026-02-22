@@ -1,4 +1,4 @@
-# Snapshot Scope & Lineage Spec (v6.7)
+# Snapshot Scope & Lineage Spec (v7.0)
 
 ## Snapshot ID generation (MUST)
 

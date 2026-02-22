@@ -14,8 +14,8 @@ var (
 		Use:   "jvs",
 		Short: "JVS - Juicy Versioned Workspaces",
 		Long: `JVS is a snapshot-first, filesystem-native workspace versioning system
-built on JuiceFS. It provides atomic snapshots, safe restore, and
-exclusive-mode worktree isolation.`,
+built on JuiceFS. It provides atomic snapshots, detached state navigation,
+and exclusive-mode worktree isolation.`,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}

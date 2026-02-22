@@ -1,16 +1,16 @@
-# Traceability Matrix (v6.7)
+# Traceability Matrix (v7.0)
 
 This matrix maps product promises to normative specs and conformance tests.
 
-## Promise 1: Safe-by-default restore
+## Promise 1: Detached state model
 - Product statement:
   - `README.md` (Core guarantees)
   - `docs/00_OVERVIEW.md` (Product promise)
 - Normative specs:
-  - `docs/06_RESTORE_SPEC.md` (default safe restore, danger-mode constraints)
-  - `docs/02_CLI_SPEC.md` (`restore` contract and required flags)
+  - `docs/06_RESTORE_SPEC.md` (inplace restore, detached state, fork command)
+  - `docs/02_CLI_SPEC.md` (`restore` and `worktree fork` contract)
 - Conformance tests:
-  - `docs/11_CONFORMANCE_TEST_PLAN.md` tests 21, 22 (in-place restore requirements)
+  - `docs/11_CONFORMANCE_TEST_PLAN.md` tests 21-24 (detached state, restore HEAD, fork)
 
 ## Promise 2: Verifiable tamper-evident history
 - Product statement:
