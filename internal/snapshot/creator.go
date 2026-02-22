@@ -14,7 +14,6 @@ import (
 	"github.com/jvs-project/jvs/internal/worktree"
 	"github.com/jvs-project/jvs/pkg/errclass"
 	"github.com/jvs-project/jvs/pkg/fsutil"
-	"github.com/jvs-project/jvs/pkg/metrics"
 	"github.com/jvs-project/jvs/pkg/model"
 )
 
@@ -24,7 +23,6 @@ type Creator struct {
 	engineType  model.EngineType
 	engine      engine.Engine
 	auditLogger *audit.FileAppender
-	recordMetrics bool
 }
 
 // NewCreator creates a new snapshot creator.
@@ -33,40 +31,15 @@ func NewCreator(repoRoot string, engineType model.EngineType) *Creator {
 
 	auditPath := filepath.Join(repoRoot, ".jvs", "audit", "audit.jsonl")
 	return &Creator{
-		repoRoot:       repoRoot,
-		engineType:     engineType,
-		engine:         eng,
-		auditLogger:    audit.NewFileAppender(auditPath),
-		recordMetrics:  metrics.Enabled(),
+		repoRoot:    repoRoot,
+		engineType:  engineType,
+		engine:      eng,
+		auditLogger: audit.NewFileAppender(auditPath),
 	}
-}
-
-// WithMetrics enables metrics recording for this creator.
-func (c *Creator) WithMetrics(enabled bool) *Creator {
-	c.recordMetrics = enabled && metrics.Enabled()
-	return c
 }
 
 // Create performs a full snapshot of the worktree using the 12-step protocol.
 func (c *Creator) Create(worktreeName, note string, tags []string) (*model.Descriptor, error) {
-	startTime := time.Now()
-	desc, err := c.createWithMetrics(worktreeName, note, tags, nil)
-
-	// Record metrics if enabled
-	if c.recordMetrics {
-		sizeBytes := int64(0)
-		if desc != nil {
-			sizeBytes = c.getSnapshotSize(desc.SnapshotID)
-		}
-		success := err == nil
-		metrics.Default().RecordSnapshot(success, time.Since(startTime), sizeBytes, c.engineType)
-	}
-
-	return desc, err
-}
-
-// createWithMetrics performs the actual snapshot creation without recording metrics.
-func (c *Creator) createWithMetrics(worktreeName, note string, tags []string, paths []string) (*model.Descriptor, error) {
 	return c.CreatePartial(worktreeName, note, tags, nil)
 }
 
@@ -309,26 +282,6 @@ func (c *Creator) clonePaths(src, dst string, paths []string) error {
 		}
 	}
 	return nil
-}
-
-// getSnapshotSize calculates the total size of a snapshot in bytes.
-func (c *Creator) getSnapshotSize(snapshotID model.SnapshotID) int64 {
-	snapshotDir := filepath.Join(c.repoRoot, ".jvs", "snapshots", string(snapshotID))
-	var size int64
-
-	filepath.Walk(snapshotDir, func(path string, info os.FileInfo, err error) error {
-		if err != nil || info.IsDir() || path == snapshotDir {
-			return nil
-		}
-		// Skip .READY marker
-		if filepath.Base(path) == ".READY" {
-			return nil
-		}
-		size += info.Size()
-		return nil
-	})
-
-	return size
 }
 
 func (c *Creator) writeIntent(path string, intent *model.IntentRecord) error {
