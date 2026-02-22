@@ -6,7 +6,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/jvs-project/jvs/internal/repo"
 	"github.com/jvs-project/jvs/pkg/config"
 )
 
@@ -88,11 +87,7 @@ var templateShowCmd = &cobra.Command{
 	Short: "Show snapshot template details",
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		r, err := repo.Find()
-		if err != nil {
-			fmtErr("find repository: %v", err)
-			os.Exit(1)
-		}
+		r := requireRepo()
 
 		name := args[0]
 		tmpl := config.ResolveTemplate(r.Root, name)
