@@ -56,7 +56,7 @@ Examples:
 			}
 
 			// Create engine for cloning
-			eng := engine.NewEngine(model.EngineCopy)
+			eng := engine.NewEngine(detectEngine(r.Root))
 
 			cfg, err := mgr.CreateFromSnapshot(name, snapshotID, func(src, dst string) error {
 				_, err := eng.Clone(src, dst)

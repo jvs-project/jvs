@@ -8,7 +8,6 @@ import (
 
 	"github.com/jvs-project/jvs/internal/snapshot"
 	"github.com/jvs-project/jvs/internal/worktree"
-	"github.com/jvs-project/jvs/pkg/model"
 	"github.com/jvs-project/jvs/pkg/pathutil"
 )
 
@@ -69,7 +68,7 @@ to create a new worktree from the current position first.`,
 			}
 		}
 
-		creator := snapshot.NewCreator(r.Root, model.EngineCopy)
+		creator := snapshot.NewCreator(r.Root, detectEngine(r.Root))
 		desc, err := creator.Create(wtName, note, snapshotTags)
 		if err != nil {
 			fmtErr("create snapshot: %v", err)

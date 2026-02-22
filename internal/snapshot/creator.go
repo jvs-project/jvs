@@ -62,27 +62,39 @@ func (c *Creator) Create(worktreeName, note string, tags []string) (*model.Descr
 	}
 	defer os.Remove(intentPath) // cleanup on success
 
-	// Step 4: Create snapshot directory
+	// Step 4: Create snapshot .tmp directory (atomic publish pattern)
+	snapshotTmpDir := filepath.Join(c.repoRoot, ".jvs", "snapshots", string(snapshotID)+".tmp")
 	snapshotDir := filepath.Join(c.repoRoot, ".jvs", "snapshots", string(snapshotID))
-	if err := os.MkdirAll(snapshotDir, 0755); err != nil {
-		return nil, fmt.Errorf("create snapshot dir: %w", err)
+	if err := os.MkdirAll(snapshotTmpDir, 0755); err != nil {
+		return nil, fmt.Errorf("create snapshot tmp dir: %w", err)
 	}
 
-	// Step 5: Clone payload to snapshot directory
+	// Cleanup helper for failure cases
+	cleanupTmp := func() {
+		os.RemoveAll(snapshotTmpDir)
+	}
+
+	// Step 5: Clone payload to snapshot .tmp directory
 	payloadPath := wtMgr.Path(worktreeName)
-	if _, err := c.engine.Clone(payloadPath, snapshotDir); err != nil {
-		os.RemoveAll(snapshotDir)
+	if _, err := c.engine.Clone(payloadPath, snapshotTmpDir); err != nil {
+		cleanupTmp()
 		return nil, fmt.Errorf("clone payload: %w", err)
 	}
 
-	// Step 6: Compute payload root hash
-	payloadHash, err := integrity.ComputePayloadRootHash(snapshotDir)
+	// Step 6: Fsync the cloned tree for durability
+	if err := fsutil.FsyncTree(snapshotTmpDir); err != nil {
+		cleanupTmp()
+		return nil, fmt.Errorf("fsync snapshot tree: %w", err)
+	}
+
+	// Step 7: Compute payload root hash
+	payloadHash, err := integrity.ComputePayloadRootHash(snapshotTmpDir)
 	if err != nil {
-		os.RemoveAll(snapshotDir)
+		cleanupTmp()
 		return nil, fmt.Errorf("compute payload hash: %w", err)
 	}
 
-	// Step 7: Create descriptor
+	// Step 8: Create descriptor
 	var parentID *model.SnapshotID
 	if cfg.HeadSnapshotID != "" {
 		pid := cfg.HeadSnapshotID
@@ -101,15 +113,15 @@ func (c *Creator) Create(worktreeName, note string, tags []string) (*model.Descr
 		IntegrityState:  model.IntegrityVerified,
 	}
 
-	// Step 8: Compute descriptor checksum
+	// Step 9: Compute descriptor checksum
 	checksum, err := integrity.ComputeDescriptorChecksum(desc)
 	if err != nil {
-		os.RemoveAll(snapshotDir)
+		cleanupTmp()
 		return nil, fmt.Errorf("compute checksum: %w", err)
 	}
 	desc.DescriptorChecksum = checksum
 
-	// Step 9: Write .READY marker
+	// Step 10: Write .READY marker in tmp
 	readyMarker := &model.ReadyMarker{
 		SnapshotID:         snapshotID,
 		CompletedAt:        time.Now().UTC(),
@@ -117,26 +129,32 @@ func (c *Creator) Create(worktreeName, note string, tags []string) (*model.Descr
 		Engine:             c.engineType,
 		DescriptorChecksum: checksum,
 	}
-	readyPath := filepath.Join(snapshotDir, ".READY")
+	readyPath := filepath.Join(snapshotTmpDir, ".READY")
 	if err := c.writeReadyMarker(readyPath, readyMarker); err != nil {
-		os.RemoveAll(snapshotDir)
+		cleanupTmp()
 		return nil, fmt.Errorf("write ready marker: %w", err)
 	}
 
-	// Step 10: Write descriptor atomically
+	// Step 11: Atomic rename tmp -> final
+	if err := fsutil.RenameAndSync(snapshotTmpDir, snapshotDir); err != nil {
+		cleanupTmp()
+		return nil, fmt.Errorf("atomic rename snapshot: %w", err)
+	}
+
+	// Step 12: Write descriptor atomically
 	descriptorPath := filepath.Join(c.repoRoot, ".jvs", "descriptors", string(snapshotID)+".json")
 	if err := c.writeDescriptor(descriptorPath, desc); err != nil {
-		os.RemoveAll(snapshotDir)
+		// Snapshot is already renamed, don't remove it
 		return nil, fmt.Errorf("write descriptor: %w", err)
 	}
 
-	// Step 11: Update worktree head and latest
+	// Step 13: Update worktree head and latest
 	if err := wtMgr.SetLatest(worktreeName, snapshotID); err != nil {
 		// Don't remove snapshot, it's valid
 		return nil, fmt.Errorf("update head: %w", err)
 	}
 
-	// Step 12: Write audit log
+	// Step 14: Write audit log
 	if err := c.auditLogger.Append(model.EventTypeSnapshotCreate, worktreeName, snapshotID, map[string]any{
 		"engine":   string(c.engineType),
 		"note":     note,

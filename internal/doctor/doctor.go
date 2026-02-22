@@ -1,6 +1,8 @@
 package doctor
 
 import (
+	"bufio"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -8,6 +10,7 @@ import (
 	"github.com/jvs-project/jvs/internal/repo"
 	"github.com/jvs-project/jvs/internal/verify"
 	"github.com/jvs-project/jvs/internal/worktree"
+	"github.com/jvs-project/jvs/pkg/model"
 )
 
 // Finding represents a detected issue.
@@ -15,6 +18,7 @@ type Finding struct {
 	Category    string `json:"category"`
 	Description string `json:"description"`
 	Severity    string `json:"severity"`
+	ErrorCode   string `json:"error_code,omitempty"`
 	Path        string `json:"path,omitempty"`
 }
 
@@ -50,9 +54,11 @@ func (d *Doctor) Check(strict bool) (*Result, error) {
 	// 4. Check snapshot integrity (if strict)
 	if strict {
 		d.checkSnapshotIntegrity(result)
+		// 5. Check audit chain (if strict)
+		d.checkAuditChain(result)
 	}
 
-	// 5. Check for orphan tmp files
+	// 6. Check for orphan tmp files
 	d.checkOrphanTmp(result)
 
 	return result, nil
@@ -180,4 +186,79 @@ func (d *Doctor) checkOrphanTmp(result *Result) {
 		}
 		return nil
 	})
+
+	// Check for orphan snapshot .tmp directories
+	snapshotsDir := filepath.Join(d.repoRoot, ".jvs", "snapshots")
+	entries, err := os.ReadDir(snapshotsDir)
+	if err == nil {
+		for _, entry := range entries {
+			if entry.IsDir() && filepath.Ext(entry.Name()) == ".tmp" {
+				result.Findings = append(result.Findings, Finding{
+					Category:    "tmp",
+					Description: fmt.Sprintf("orphan snapshot tmp directory: %s", entry.Name()),
+					Severity:    "warning",
+					Path:        filepath.Join(snapshotsDir, entry.Name()),
+				})
+			}
+		}
+	}
+}
+
+// checkAuditChain verifies the audit log hash chain integrity.
+func (d *Doctor) checkAuditChain(result *Result) {
+	auditPath := filepath.Join(d.repoRoot, ".jvs", "audit", "audit.jsonl")
+	file, err := os.Open(auditPath)
+	if os.IsNotExist(err) {
+		return // No audit log yet is OK
+	}
+	if err != nil {
+		result.Findings = append(result.Findings, Finding{
+			Category:    "audit",
+			Description: fmt.Sprintf("cannot open audit log: %v", err),
+			Severity:    "warning",
+			Path:        auditPath,
+		})
+		return
+	}
+	defer file.Close()
+
+	var prevHash model.HashValue
+	var lineNum int
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		lineNum++
+		var record model.AuditRecord
+		if err := json.Unmarshal(scanner.Bytes(), &record); err != nil {
+			result.Findings = append(result.Findings, Finding{
+				Category:    "audit",
+				Description: fmt.Sprintf("malformed record at line %d", lineNum),
+				Severity:    "warning",
+				Path:        auditPath,
+			})
+			continue
+		}
+
+		// Verify chain linkage (skip first record which has empty prevHash)
+		if prevHash != "" && record.PrevHash != prevHash {
+			result.Findings = append(result.Findings, Finding{
+				Category:    "audit",
+				Description: fmt.Sprintf("audit hash chain broken at line %d", lineNum),
+				Severity:    "critical",
+				ErrorCode:   "E_AUDIT_CHAIN_BROKEN",
+				Path:        auditPath,
+			})
+			result.Healthy = false
+			return
+		}
+		prevHash = record.RecordHash
+	}
+
+	if err := scanner.Err(); err != nil {
+		result.Findings = append(result.Findings, Finding{
+			Category:    "audit",
+			Description: fmt.Sprintf("error reading audit log: %v", err),
+			Severity:    "warning",
+			Path:        auditPath,
+		})
+	}
 }

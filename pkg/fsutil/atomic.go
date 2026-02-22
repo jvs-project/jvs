@@ -65,3 +65,26 @@ func FsyncDir(dirPath string) error {
 	defer d.Close()
 	return d.Sync()
 }
+
+// FsyncTree recursively fsyncs all files under the given root directory.
+// This ensures all data is durably written to disk before marking an operation complete.
+func FsyncTree(root string) error {
+	return filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		// Only sync files, not directories (directories are synced via FsyncDir)
+		if !info.IsDir() {
+			f, err := os.Open(path)
+			if err != nil {
+				return fmt.Errorf("open %s for fsync: %w", path, err)
+			}
+			if err := f.Sync(); err != nil {
+				f.Close()
+				return fmt.Errorf("fsync %s: %w", path, err)
+			}
+			f.Close()
+		}
+		return nil
+	})
+}

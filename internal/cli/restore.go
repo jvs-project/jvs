@@ -44,7 +44,7 @@ Examples:
 
 		// Handle special "HEAD" case
 		if snapshotArg == "HEAD" {
-			restorer := restore.NewRestorer(r.Root, model.EngineCopy)
+			restorer := restore.NewRestorer(r.Root, detectEngine(r.Root))
 			if err := restorer.RestoreToLatest(wtName); err != nil {
 				fmtErr("restore to latest: %v", err)
 				os.Exit(1)
@@ -83,7 +83,7 @@ Examples:
 		}
 
 		// Perform restore
-		restorer := restore.NewRestorer(r.Root, model.EngineCopy)
+		restorer := restore.NewRestorer(r.Root, detectEngine(r.Root))
 		if err := restorer.Restore(wtName, snapshotID); err != nil {
 			fmtErr("restore: %v", err)
 			os.Exit(1)
