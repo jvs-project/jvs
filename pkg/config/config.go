@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/jvs-project/jvs/pkg/model"
+	"github.com/jvs-project/jvs/pkg/webhook"
 	"gopkg.in/yaml.v3"
 )
 
@@ -33,6 +34,9 @@ type Config struct {
 
 	// SnapshotTemplates defines pre-configured snapshot patterns.
 	SnapshotTemplates map[string]SnapshotTemplate `yaml:"snapshot_templates,omitempty"`
+
+	// Webhooks defines webhook notification configuration.
+	Webhooks *WebhookConfig `yaml:"webhooks,omitempty"`
 
 	// Legacy fields for backward compatibility
 	Engine          string                `yaml:"engine,omitempty"`
@@ -66,6 +70,43 @@ type RetentionPolicyConfig struct {
 type LoggingConfig struct {
 	Level  string `yaml:"level,omitempty"`
 	Format string `yaml:"format,omitempty"` // json, text
+}
+
+// WebhookConfig represents webhook configuration for event notifications.
+type WebhookConfig struct {
+	// Enabled enables or disables webhook notifications.
+	Enabled bool `yaml:"enabled,omitempty"`
+
+	// MaxRetries is the number of retries for failed webhook deliveries.
+	MaxRetries int `yaml:"max_retries,omitempty"`
+
+	// RetryDelay is the delay between retries.
+	RetryDelay string `yaml:"retry_delay,omitempty"` // e.g., "5s", "1m"
+
+	// AsyncQueueSize is the size of the async webhook queue.
+	AsyncQueueSize int `yaml:"async_queue_size,omitempty"`
+
+	// Hooks is the list of webhook endpoints.
+	Hooks []WebhookHook `yaml:"hooks,omitempty"`
+}
+
+// WebhookHook represents a single webhook endpoint.
+type WebhookHook struct {
+	// URL is the webhook endpoint URL.
+	URL string `yaml:"url"`
+
+	// Secret is the HMAC secret for signature verification (optional).
+	Secret string `yaml:"secret,omitempty"`
+
+	// Events is the list of events to send to this webhook.
+	// Use "*" to receive all events.
+	Events []string `yaml:"events,omitempty"`
+
+	// Timeout is the HTTP request timeout (optional).
+	Timeout string `yaml:"timeout,omitempty"` // e.g., "10s"
+
+	// Enabled enables or disables this specific hook.
+	Enabled bool `yaml:"enabled,omitempty"`
 }
 
 // Default returns the default configuration.
@@ -167,6 +208,13 @@ func (c *Config) validate() error {
 	// Validate output_format if set
 	if c.OutputFormat != "" && c.OutputFormat != "text" && c.OutputFormat != "json" {
 		return fmt.Errorf("invalid output_format: %s (must be text or json)", c.OutputFormat)
+	}
+
+	// Validate webhooks if configured
+	if c.Webhooks != nil {
+		if err := c.Webhooks.Validate(); err != nil {
+			return fmt.Errorf("webhooks: %w", err)
+		}
 	}
 
 	return nil
