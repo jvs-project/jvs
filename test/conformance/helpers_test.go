@@ -77,3 +77,126 @@ func runJVSInRepo(t *testing.T, repoPath string, args ...string) (stdout, stderr
 	cwd := filepath.Join(repoPath, "main")
 	return runJVS(t, cwd, args...)
 }
+
+// runJVSInWorktree runs jvs from within a specific worktree.
+func runJVSInWorktree(t *testing.T, repoPath, worktreeName string, args ...string) (stdout, stderr string, exitCode int) {
+	t.Helper()
+	var cwd string
+	if worktreeName == "main" {
+		cwd = filepath.Join(repoPath, "main")
+	} else {
+		cwd = filepath.Join(repoPath, "worktrees", worktreeName)
+	}
+	return runJVS(t, cwd, args...)
+}
+
+// createFiles creates multiple files in a worktree.
+func createFiles(t *testing.T, worktreePath string, files map[string]string) {
+	t.Helper()
+	for filename, content := range files {
+		path := filepath.Join(worktreePath, filename)
+		dir := filepath.Dir(path)
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			t.Fatalf("failed to create directory %s: %v", dir, err)
+		}
+		if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+			t.Fatalf("failed to write file %s: %v", path, err)
+		}
+	}
+}
+
+// readFile reads file content from a worktree.
+func readFile(t *testing.T, worktreePath, filename string) string {
+	t.Helper()
+	path := filepath.Join(worktreePath, filename)
+	content, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("failed to read file %s: %v", path, err)
+	}
+	return string(content)
+}
+
+// fileExists checks if a file exists.
+func fileExists(t *testing.T, path string) bool {
+	t.Helper()
+	_, err := os.Stat(path)
+	if err == nil {
+		return true
+	}
+	if os.IsNotExist(err) {
+		return false
+	}
+	t.Fatalf("failed to stat file %s: %v", path, err)
+	return false
+}
+
+// extractJSONField extracts a specific field from JSON output.
+func extractJSONField(jsonOutput, field string) string {
+	// Look for "field": "value" pattern
+	search := `"` + field + `": "`
+	start := bytes.Index([]byte(jsonOutput), []byte(search))
+	if start == -1 {
+		// Try without quotes (for numbers)
+		searchAlt := `"` + field + `": `
+		start = bytes.Index([]byte(jsonOutput), []byte(searchAlt))
+		if start == -1 {
+			return ""
+		}
+		start += len(searchAlt)
+		// Find end (comma, newline, or closing brace)
+		end := bytes.IndexAny([]byte(jsonOutput[start:]), ",}\n")
+		if end == -1 {
+			return ""
+		}
+		return string(bytes.TrimSpace([]byte(jsonOutput[start : start+end])))
+	}
+	start += len(search)
+	end := bytes.Index([]byte(jsonOutput[start:]), []byte(`"`))
+	if end == -1 {
+		return ""
+	}
+	return jsonOutput[start : start+end]
+}
+
+// getSnapshotCount returns the number of snapshots in history JSON output.
+func getSnapshotCount(historyJSON string) int {
+	// Count occurrences of "snapshot_id" in the output
+	return bytes.Count([]byte(historyJSON), []byte(`"snapshot_id"`))
+}
+
+// extractSnapshotIDByTag extracts a snapshot ID that has a specific tag.
+func extractSnapshotIDByTag(historyJSON, tag string) string {
+	lines := bytes.Split([]byte(historyJSON), []byte("\n"))
+	var currentSnapshotID string
+	for _, line := range lines {
+		// Extract snapshot_id
+		if bytes.Contains(line, []byte(`"snapshot_id"`)) {
+			parts := bytes.Split(line, []byte(`"`))
+			for i, p := range parts {
+				if string(p) == "snapshot_id" && i+2 < len(parts) {
+					currentSnapshotID = string(parts[i+2])
+				}
+			}
+		}
+		// Check for the tag in the same block
+		if bytes.Contains(line, []byte(`"tags"`)) && currentSnapshotID != "" {
+			// Look ahead for the tag
+			if bytes.Contains(line, []byte(tag)) {
+				return currentSnapshotID
+			}
+		}
+	}
+	return ""
+}
+
+// waitForSnapshotReady waits for .READY marker to appear for a snapshot.
+func waitForSnapshotReady(t *testing.T, repoPath, snapshotID string) {
+	t.Helper()
+	readyPath := filepath.Join(repoPath, ".jvs", "snapshots", snapshotID+".READY")
+	for i := 0; i < 100; i++ {
+		if _, err := os.Stat(readyPath); err == nil {
+			return
+		}
+	}
+	t.Fatalf("timeout waiting for .READY marker for snapshot %s", snapshotID)
+}
