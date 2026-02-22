@@ -5,14 +5,12 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 	"time"
 
 	"github.com/jvs-project/jvs/internal/audit"
 	"github.com/jvs-project/jvs/internal/snapshot"
 	"github.com/jvs-project/jvs/internal/worktree"
-	"github.com/jvs-project/jvs/pkg/config"
 	"github.com/jvs-project/jvs/pkg/fsutil"
 	"github.com/jvs-project/jvs/pkg/model"
 	"github.com/jvs-project/jvs/pkg/uuidutil"
@@ -20,29 +18,18 @@ import (
 
 // Collector handles garbage collection.
 type Collector struct {
-	repoRoot         string
-	auditLogger      *audit.FileAppender
+	repoRoot       string
+	auditLogger    *audit.FileAppender
 	progressCallback func(string, int, int, string)
-	retentionPolicy  model.RetentionPolicy
 }
 
 // NewCollector creates a new GC collector.
 func NewCollector(repoRoot string) *Collector {
 	auditPath := filepath.Join(repoRoot, ".jvs", "audit", "audit.jsonl")
 	return &Collector{
-		repoRoot:        repoRoot,
-		auditLogger:     audit.NewFileAppender(auditPath),
-		retentionPolicy: loadRetentionPolicy(repoRoot),
+		repoRoot:    repoRoot,
+		auditLogger: audit.NewFileAppender(auditPath),
 	}
-}
-
-// loadRetentionPolicy loads the retention policy from config.
-func loadRetentionPolicy(repoRoot string) model.RetentionPolicy {
-	cfg, err := config.Load(repoRoot)
-	if err != nil {
-		return model.DefaultRetentionPolicy()
-	}
-	return cfg.GetRetentionPolicy()
 }
 
 // SetProgressCallback sets a callback for progress updates.
@@ -50,21 +37,23 @@ func (c *Collector) SetProgressCallback(cb func(string, int, int, string)) {
 	c.progressCallback = cb
 }
 
-// Plan creates a GC plan based on the current retention policy.
+// Plan creates a GC plan.
 func (c *Collector) Plan() (*model.GCPlan, error) {
+	protectedSet, protectedByLineage, protectedByPin, err := c.computeProtectedSet()
+	if err != nil {
+		return nil, fmt.Errorf("compute protected set: %w", err)
+	}
+
+	// Find all snapshots
 	allSnapshots, err := c.listAllSnapshots()
 	if err != nil {
 		return nil, fmt.Errorf("list snapshots: %w", err)
 	}
 
-	protectedMap, protectedByLineage, protectedByPin, protectedByRetention, err := c.computeProtectedSet(allSnapshots)
-	if err != nil {
-		return nil, fmt.Errorf("compute protected set: %w", err)
-	}
-
-	var protectedSet []model.SnapshotID
-	for id := range protectedMap {
-		protectedSet = append(protectedSet, id)
+	// Determine what to delete
+	protectedMap := make(map[model.SnapshotID]bool)
+	for _, id := range protectedSet {
+		protectedMap[id] = true
 	}
 
 	var toDelete []model.SnapshotID
@@ -78,16 +67,19 @@ func (c *Collector) Plan() (*model.GCPlan, error) {
 	deletableBytes := int64(len(toDelete)) * 1024 * 1024 // assume 1MB each
 
 	plan := &model.GCPlan{
-		PlanID:                 uuidutil.NewV4(),
-		CreatedAt:              time.Now().UTC(),
-		ProtectedSet:           protectedSet,
-		ProtectedByPin:         protectedByPin,
-		ProtectedByLineage:     protectedByLineage,
-		ProtectedByRetention:   protectedByRetention,
-		CandidateCount:         len(toDelete),
-		ToDelete:               toDelete,
+		PlanID:               uuidutil.NewV4(),
+		CreatedAt:            time.Now().UTC(),
+		ProtectedSet:         protectedSet,
+		ProtectedByPin:       protectedByPin,
+		ProtectedByLineage:   protectedByLineage,
+		ProtectedByRetention: 0, // No retention-based protection in simplified mode
+		CandidateCount:       len(toDelete),
+		ToDelete:             toDelete,
 		DeletableBytesEstimate: deletableBytes,
-		RetentionPolicy:        c.retentionPolicy,
+		RetentionPolicy: model.RetentionPolicy{
+			KeepMinSnapshots: 10,
+			KeepMinAge:       24 * time.Hour,
+		},
 	}
 
 	// Write plan
@@ -106,14 +98,14 @@ func (c *Collector) Run(planID string) error {
 	}
 
 	// Revalidate protected set
-	allSnapshots, err := c.listAllSnapshots()
-	if err != nil {
-		return fmt.Errorf("list snapshots: %w", err)
-	}
-
-	protectedMap, _, _, _, err := c.computeProtectedSet(allSnapshots)
+	currentProtected, _, _, err := c.computeProtectedSet()
 	if err != nil {
 		return fmt.Errorf("revalidate protected set: %w", err)
+	}
+
+	protectedMap := make(map[model.SnapshotID]bool)
+	for _, id := range currentProtected {
+		protectedMap[id] = true
 	}
 
 	// Check for plan mismatch
@@ -168,25 +160,16 @@ func (c *Collector) Run(planID string) error {
 	return nil
 }
 
-// snapshotWithTime is used for sorting snapshots by creation time.
-type snapshotWithTime struct {
-	ID        model.SnapshotID
-	CreatedAt time.Time
-}
-
-// computeProtectedSet determines which snapshots should be protected from GC.
-// Returns: (protected map, protected by lineage count, protected by pin count, protected by retention count, error)
-func (c *Collector) computeProtectedSet(allSnapshots []model.SnapshotID) (map[model.SnapshotID]bool, int, int, int, error) {
+func (c *Collector) computeProtectedSet() ([]model.SnapshotID, int, int, error) {
 	protected := make(map[model.SnapshotID]bool)
 	lineageCount := 0
 	pinCount := 0
-	retentionCount := 0
 
 	// 1. All worktree heads
 	wtMgr := worktree.NewManager(c.repoRoot)
 	wtList, err := wtMgr.List()
 	if err != nil {
-		return nil, 0, 0, 0, err
+		return nil, 0, 0, err
 	}
 	for _, cfg := range wtList {
 		if cfg.HeadSnapshotID != "" {
@@ -237,54 +220,11 @@ func (c *Collector) computeProtectedSet(allSnapshots []model.SnapshotID) (map[mo
 		}
 	}
 
-	// 5. Retention policy: keep N most recent snapshots
-	snapshotsByTime := c.getSnapshotsByTime(allSnapshots)
-	keepCount := c.retentionPolicy.KeepMinSnapshots
-	if keepCount > 0 {
-		// Keep the N most recent snapshots (that aren't already protected)
-		for i := len(snapshotsByTime) - 1; i >= 0 && keepCount > 0; i-- {
-			snap := snapshotsByTime[i]
-			if !protected[snap.ID] {
-				protected[snap.ID] = true
-				retentionCount++
-				keepCount--
-			}
-		}
+	var result []model.SnapshotID
+	for id := range protected {
+		result = append(result, id)
 	}
-
-	// 6. Retention policy: keep snapshots within the minimum age
-	minAge := c.retentionPolicy.KeepMinAge
-	if minAge > 0 {
-		cutoff := time.Now().Add(-minAge)
-		for _, snap := range snapshotsByTime {
-			if !protected[snap.ID] && snap.CreatedAt.After(cutoff) {
-				protected[snap.ID] = true
-				retentionCount++
-			}
-		}
-	}
-
-	return protected, lineageCount, pinCount, retentionCount, nil
-}
-
-// getSnapshotsByTime returns all snapshots sorted by creation time.
-func (c *Collector) getSnapshotsByTime(allSnapshots []model.SnapshotID) []snapshotWithTime {
-	var snapshots []snapshotWithTime
-	for _, id := range allSnapshots {
-		desc, err := snapshot.LoadDescriptor(c.repoRoot, id)
-		if err != nil {
-			continue // Skip snapshots we can't read
-		}
-		snapshots = append(snapshots, snapshotWithTime{
-			ID:        id,
-			CreatedAt: desc.CreatedAt,
-		})
-	}
-	// Sort by creation time (oldest first)
-	sort.Slice(snapshots, func(i, j int) bool {
-		return snapshots[i].CreatedAt.Before(snapshots[j].CreatedAt)
-	})
-	return snapshots
+	return result, lineageCount, pinCount, nil
 }
 
 func (c *Collector) walkLineage(snapshotID model.SnapshotID, protected map[model.SnapshotID]bool) int {
