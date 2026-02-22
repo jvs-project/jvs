@@ -6,11 +6,14 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
+
+	"github.com/jvs-project/jvs/pkg/logging"
 )
 
 var (
-	jsonOutput bool
-	rootCmd    = &cobra.Command{
+	jsonOutput  bool
+	debugOutput bool
+	rootCmd     = &cobra.Command{
 		Use:   "jvs",
 		Short: "JVS - Juicy Versioned Workspaces",
 		Long: `JVS is a snapshot-first, filesystem-native workspace versioning system
@@ -18,11 +21,18 @@ built on JuiceFS. It provides atomic snapshots, detached state navigation,
 and exclusive-mode worktree isolation.`,
 		SilenceUsage:  true,
 		SilenceErrors: true,
+		PersistentPreRun: func(cmd *cobra.Command, args []string) {
+			// Configure logging based on debug flag
+			if debugOutput {
+				logging.SetGlobal(logging.NewLogger(logging.LevelDebug))
+			}
+		},
 	}
 )
 
 func init() {
 	rootCmd.PersistentFlags().BoolVar(&jsonOutput, "json", false, "output in JSON format")
+	rootCmd.PersistentFlags().BoolVar(&debugOutput, "debug", false, "enable debug logging")
 }
 
 // Execute runs the root command.
