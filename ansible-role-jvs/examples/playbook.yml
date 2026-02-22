@@ -1,0 +1,46 @@
+---
+# Example playbook for JVS role
+
+- name: Install and configure JVS
+  hosts: all
+  become: true
+
+  vars:
+    # JVS version to install
+    jvs_version: "v7.0"
+
+    # Default configuration
+    jvs_default_engine: "auto"
+    jvs_default_tags:
+      - "managed-by-ansible"
+
+    # Repositories to create
+    jvs_repositories:
+      - name: production-data
+        path: /data/production
+        engine: juicefs-clone
+        default_tags:
+          - production
+
+      - name: staging-data
+        path: /data/staging
+        engine: reflink-copy
+        default_tags:
+          - staging
+
+    # Garbage collection
+    jvs_gc_enabled: true
+    jvs_gc_schedule: "0 2 * * *"  # Daily at 2 AM
+    jvs_gc_systemd_timer: true
+
+    # Webhook notifications
+    jvs_webhooks_enabled: true
+    jvs_webhooks:
+      - url: https://hooks.slack.com/services/YOUR/WEBHOOK/URL
+        events:
+          - snapshot.created
+          - restore.complete
+          - gc.complete
+
+  roles:
+    - role: ansible-role-jvs

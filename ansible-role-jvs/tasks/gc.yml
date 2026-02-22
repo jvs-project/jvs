@@ -1,0 +1,37 @@
+---
+# Garbage collection tasks
+
+- name: Create GC systemd timer unit
+  template:
+    src: jvs-gc.timer.j2
+    dest: /etc/systemd/system/jvs-gc@.timer
+    mode: '0644'
+  when:
+    - jvs_gc_systemd_timer
+    - jvs_gc_schedule != ""
+  notify: reload systemd
+  tags: ['jvs', 'gc']
+
+- name: Create GC systemd service unit
+  template:
+    src: jvs-gc.service.j2
+    dest: /etc/systemd/system/jvs-gc@.service
+    mode: '0644'
+  when:
+    - jvs_gc_systemd_timer
+  notify: reload systemd
+  tags: ['jvs', 'gc']
+
+- name: Enable and start GC timers
+  systemd:
+    name: "jvs-gc@{{ item.name }}.timer"
+    state: started
+    enabled: true
+    daemon_reload: true
+  when:
+    - jvs_gc_systemd_timer
+    - jvs_gc_schedule != ""
+  loop: "{{ jvs_repositories }}"
+  loop_control:
+    label: "{{ item.name }}"
+  tags: ['jvs', 'gc']

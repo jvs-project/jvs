@@ -1,0 +1,53 @@
+---
+# JVS global configuration
+# Managed by Ansible - Do not edit manually
+
+{% if jvs_default_engine %}
+default_engine: {{ jvs_default_engine }}
+{% endif %}
+
+{% if jvs_default_tags %}
+default_tags:
+{% for tag in jvs_default_tags %}
+  - {{ tag }}
+{% endfor %}
+{% endif %}
+
+{% if jvs_output_format %}
+output_format: {{ jvs_output_format }}
+{% endif %}
+
+{% if jvs_progress_enabled is defined %}
+progress_enabled: {{ jvs_progress_enabled }}
+{% endif %}
+
+{% if jvs_snapshot_templates %}
+snapshot_templates:
+{{ jvs_snapshot_templates | to_nice_yaml(indent=2) }}
+{% endif %}
+
+{% if jvs_retention_enabled %}
+retention_policy:
+  keep_min_snapshots: {{ jvs_retention_min_snapshots }}
+  keep_min_age: {{ jvs_retention_min_age }}
+{% endif %}
+
+{% if jvs_webhooks_enabled %}
+webhooks:
+  enabled: true
+{% if jvs_webhooks %}
+  hooks:
+{% for hook in jvs_webhooks %}
+    - url: {{ hook.url }}
+{% if hook.secret is defined %}
+      secret: {{ hook.secret }}
+{% endif %}
+{% if hook.events is defined %}
+      events:
+{% for event in hook.events %}
+        - {{ event }}
+{% endfor %}
+{% endif %}
+{% endfor %}
+{% endif %}
+{% endif %}

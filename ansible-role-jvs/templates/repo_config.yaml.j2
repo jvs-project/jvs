@@ -1,0 +1,14 @@
+---
+# JVS repository configuration
+# Managed by Ansible - Do not edit manually
+
+{% if repo_engine %}
+default_engine: {{ repo_engine }}
+{% endif %}
+
+{% if repo_tags %}
+default_tags:
+{% for tag in repo_tags %}
+  - {{ tag }}
+{% endfor %}
+{% endif %}

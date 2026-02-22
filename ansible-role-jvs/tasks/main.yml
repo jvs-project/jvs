@@ -1,0 +1,40 @@
+---
+# Main tasks for JVS role
+
+- name: Include OS-specific variables
+  include_vars: "{{ item }}"
+  with_first_found:
+    - files:
+        - "{{ ansible_distribution }}-{{ ansible_distribution_version }}.yml"
+        - "{{ ansible_distribution }}-{{ ansible_distribution_major_version }}.yml"
+        - "{{ ansible_distribution }}.yml"
+        - "{{ ansible_os_family }}.yml"
+        - "default.yml"
+      paths:
+        - vars
+  tags: ['always']
+
+- name: Include installation tasks
+  include_tasks: install.yml
+  tags: ['jvs', 'install']
+
+- name: Include configuration tasks
+  include_tasks: config.yml
+  tags: ['jvs', 'config']
+
+- name: Include repositories tasks
+  include_tasks: repositories.yml
+  when: jvs_repositories | length > 0
+  tags: ['jvs', 'repositories']
+
+- name: Include garbage collection tasks
+  include_tasks: gc.yml
+  when: jvs_gc_enabled
+  tags: ['jvs', 'gc']
+
+- name: Verify JVS installation
+  command: "{{ jvs_bin_dir }}/jvs version"
+  register: jvs_version_check
+  changed_when: false
+  failed_when: jvs_version_check.rc != 0
+  tags: ['jvs', 'verify']
