@@ -46,6 +46,9 @@ type Descriptor struct {
 	PayloadRootHash    HashValue      `json:"payload_root_hash"`
 	DescriptorChecksum HashValue      `json:"descriptor_checksum"`
 	IntegrityState     IntegrityState `json:"integrity_state"`
+	// PartialPaths is set for partial snapshots, listing the specific paths included.
+	// Empty or nil means a full worktree snapshot.
+	PartialPaths       []string       `json:"partial_paths,omitempty"`
 }
 
 // ReadyMarker is the .READY file content indicating complete snapshot.

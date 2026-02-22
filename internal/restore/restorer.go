@@ -4,12 +4,14 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/jvs-project/jvs/internal/audit"
 	"github.com/jvs-project/jvs/internal/engine"
 	"github.com/jvs-project/jvs/internal/snapshot"
 	"github.com/jvs-project/jvs/internal/worktree"
 	"github.com/jvs-project/jvs/pkg/fsutil"
+	"github.com/jvs-project/jvs/pkg/metrics"
 	"github.com/jvs-project/jvs/pkg/model"
 	"github.com/jvs-project/jvs/pkg/uuidutil"
 )
@@ -20,6 +22,7 @@ type Restorer struct {
 	engineType  model.EngineType
 	engine      engine.Engine
 	auditLogger *audit.FileAppender
+	recordMetrics bool
 }
 
 // NewRestorer creates a new restorer.
@@ -28,10 +31,11 @@ func NewRestorer(repoRoot string, engineType model.EngineType) *Restorer {
 
 	auditPath := filepath.Join(repoRoot, ".jvs", "audit", "audit.jsonl")
 	return &Restorer{
-		repoRoot:    repoRoot,
-		engineType:  engineType,
-		engine:      eng,
-		auditLogger: audit.NewFileAppender(auditPath),
+		repoRoot:       repoRoot,
+		engineType:     engineType,
+		engine:         eng,
+		auditLogger:    audit.NewFileAppender(auditPath),
+		recordMetrics:  metrics.Enabled(),
 	}
 }
 
@@ -39,6 +43,19 @@ func NewRestorer(repoRoot string, engineType model.EngineType) *Restorer {
 // This puts the worktree into a "detached" state (unless restoring to HEAD).
 // The worktree is specified by name, not derived from the snapshot.
 func (r *Restorer) Restore(worktreeName string, snapshotID model.SnapshotID) error {
+	startTime := time.Now()
+	err := r.restore(worktreeName, snapshotID)
+
+	// Record metrics if enabled
+	if r.recordMetrics {
+		metrics.Default().RecordRestore(err == nil, time.Since(startTime))
+	}
+
+	return err
+}
+
+// restore performs the actual restore operation.
+func (r *Restorer) restore(worktreeName string, snapshotID model.SnapshotID) error {
 	// Load and verify snapshot
 	_, err := snapshot.LoadDescriptor(r.repoRoot, snapshotID)
 	if err != nil {

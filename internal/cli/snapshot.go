@@ -8,20 +8,25 @@ import (
 
 	"github.com/jvs-project/jvs/internal/snapshot"
 	"github.com/jvs-project/jvs/internal/worktree"
+	"github.com/jvs-project/jvs/pkg/model"
 	"github.com/jvs-project/jvs/pkg/pathutil"
 )
 
 var (
-	snapshotTags []string
+	snapshotTags  []string
+	snapshotPaths []string
 )
 
 var snapshotCmd = &cobra.Command{
-	Use:   "snapshot [note]",
+	Use:   "snapshot [note] [-- <paths>...]",
 	Short: "Create a snapshot of the current worktree",
 	Long: `Create a snapshot of the current worktree.
 
 Captures the current state of the worktree at a point in time.
 Use --tag to attach one or more tags to the snapshot.
+
+For partial snapshots of specific paths, use -- followed by paths:
+  jvs snapshot "models update" -- models/ data/
 
 NOTE: Cannot create snapshots in detached state. Use 'jvs worktree fork'
 to create a new worktree from the current position first.`,
@@ -51,10 +56,6 @@ to create a new worktree from the current position first.`,
 			os.Exit(1)
 		}
 
-		// Check if worktree has any snapshots yet (need at least one before we can create more)
-		// Actually, we should allow creating the first snapshot even if LatestSnapshotID is empty
-		// The check above only fails if IsDetached() is true, which requires LatestSnapshotID != ""
-
 		note := ""
 		if len(args) > 0 {
 			note = args[0]
@@ -69,7 +70,16 @@ to create a new worktree from the current position first.`,
 		}
 
 		creator := snapshot.NewCreator(r.Root, detectEngine(r.Root))
-		desc, err := creator.Create(wtName, note, snapshotTags)
+		var desc *model.Descriptor
+
+		if len(snapshotPaths) > 0 {
+			// Partial snapshot
+			desc, err = creator.CreatePartial(wtName, note, snapshotTags, snapshotPaths)
+		} else {
+			// Full snapshot
+			desc, err = creator.Create(wtName, note, snapshotTags)
+		}
+
 		if err != nil {
 			fmtErr("create snapshot: %v", err)
 			os.Exit(1)
@@ -78,12 +88,17 @@ to create a new worktree from the current position first.`,
 		if jsonOutput {
 			outputJSON(desc)
 		} else {
-			fmt.Printf("Created snapshot %s\n", desc.SnapshotID)
+			if len(snapshotPaths) > 0 {
+				fmt.Printf("Created partial snapshot %s (%d paths)\n", desc.SnapshotID, len(snapshotPaths))
+			} else {
+				fmt.Printf("Created snapshot %s\n", desc.SnapshotID)
+			}
 		}
 	},
 }
 
 func init() {
 	snapshotCmd.Flags().StringSliceVar(&snapshotTags, "tag", []string{}, "tag for this snapshot (can be repeated)")
+	snapshotCmd.Flags().StringSliceVar(&snapshotPaths, "paths", []string{}, "paths to include in partial snapshot")
 	rootCmd.AddCommand(snapshotCmd)
 }

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/jvs-project/jvs/internal/audit"
@@ -13,6 +14,7 @@ import (
 	"github.com/jvs-project/jvs/internal/worktree"
 	"github.com/jvs-project/jvs/pkg/errclass"
 	"github.com/jvs-project/jvs/pkg/fsutil"
+	"github.com/jvs-project/jvs/pkg/metrics"
 	"github.com/jvs-project/jvs/pkg/model"
 )
 
@@ -22,6 +24,7 @@ type Creator struct {
 	engineType  model.EngineType
 	engine      engine.Engine
 	auditLogger *audit.FileAppender
+	recordMetrics bool
 }
 
 // NewCreator creates a new snapshot creator.
@@ -30,20 +33,60 @@ func NewCreator(repoRoot string, engineType model.EngineType) *Creator {
 
 	auditPath := filepath.Join(repoRoot, ".jvs", "audit", "audit.jsonl")
 	return &Creator{
-		repoRoot:    repoRoot,
-		engineType:  engineType,
-		engine:      eng,
-		auditLogger: audit.NewFileAppender(auditPath),
+		repoRoot:       repoRoot,
+		engineType:     engineType,
+		engine:         eng,
+		auditLogger:    audit.NewFileAppender(auditPath),
+		recordMetrics:  metrics.Enabled(),
 	}
+}
+
+// WithMetrics enables metrics recording for this creator.
+func (c *Creator) WithMetrics(enabled bool) *Creator {
+	c.recordMetrics = enabled && metrics.Enabled()
+	return c
 }
 
 // Create performs a full snapshot of the worktree using the 12-step protocol.
 func (c *Creator) Create(worktreeName, note string, tags []string) (*model.Descriptor, error) {
+	startTime := time.Now()
+	desc, err := c.createWithMetrics(worktreeName, note, tags, nil)
+
+	// Record metrics if enabled
+	if c.recordMetrics {
+		sizeBytes := int64(0)
+		if desc != nil {
+			sizeBytes = c.getSnapshotSize(desc.SnapshotID)
+		}
+		success := err == nil
+		metrics.Default().RecordSnapshot(success, time.Since(startTime), sizeBytes, c.engineType)
+	}
+
+	return desc, err
+}
+
+// createWithMetrics performs the actual snapshot creation without recording metrics.
+func (c *Creator) createWithMetrics(worktreeName, note string, tags []string, paths []string) (*model.Descriptor, error) {
+	return c.CreatePartial(worktreeName, note, tags, nil)
+}
+
+// CreatePartial performs a snapshot of specific paths within the worktree.
+// If paths is nil or empty, performs a full snapshot.
+func (c *Creator) CreatePartial(worktreeName, note string, tags []string, paths []string) (*model.Descriptor, error) {
 	// Step 1: Validate worktree exists
 	wtMgr := worktree.NewManager(c.repoRoot)
 	cfg, err := wtMgr.Get(worktreeName)
 	if err != nil {
 		return nil, fmt.Errorf("get worktree: %w", err)
+	}
+
+	// Normalize and validate paths if provided
+	var partialPaths []string
+	if len(paths) > 0 {
+		partialPaths, err = c.validateAndNormalizePaths(paths, worktreeName)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// Step 2: Generate snapshot ID
@@ -76,9 +119,18 @@ func (c *Creator) Create(worktreeName, note string, tags []string) (*model.Descr
 
 	// Step 5: Clone payload to snapshot .tmp directory
 	payloadPath := wtMgr.Path(worktreeName)
-	if _, err := c.engine.Clone(payloadPath, snapshotTmpDir); err != nil {
-		cleanupTmp()
-		return nil, fmt.Errorf("clone payload: %w", err)
+
+	// For partial snapshots, only copy specified paths
+	if len(partialPaths) > 0 {
+		if err := c.clonePaths(payloadPath, snapshotTmpDir, partialPaths); err != nil {
+			cleanupTmp()
+			return nil, fmt.Errorf("clone partial paths: %w", err)
+		}
+	} else {
+		if _, err := c.engine.Clone(payloadPath, snapshotTmpDir); err != nil {
+			cleanupTmp()
+			return nil, fmt.Errorf("clone payload: %w", err)
+		}
 	}
 
 	// Step 6: Fsync the cloned tree for durability
@@ -111,6 +163,7 @@ func (c *Creator) Create(worktreeName, note string, tags []string) (*model.Descr
 		Engine:          c.engineType,
 		PayloadRootHash: payloadHash,
 		IntegrityState:  model.IntegrityVerified,
+		PartialPaths:    partialPaths,
 	}
 
 	// Step 9: Compute descriptor checksum
@@ -155,16 +208,127 @@ func (c *Creator) Create(worktreeName, note string, tags []string) (*model.Descr
 	}
 
 	// Step 14: Write audit log
-	if err := c.auditLogger.Append(model.EventTypeSnapshotCreate, worktreeName, snapshotID, map[string]any{
+	auditData := map[string]any{
 		"engine":   string(c.engineType),
 		"note":     note,
 		"checksum": string(checksum),
-	}); err != nil {
+	}
+	if len(partialPaths) > 0 {
+		auditData["partial_paths"] = partialPaths
+	}
+	if err := c.auditLogger.Append(model.EventTypeSnapshotCreate, worktreeName, snapshotID, auditData); err != nil {
 		// Non-fatal, just log
 		fmt.Fprintf(os.Stderr, "warning: failed to write audit log: %v\n", err)
 	}
 
 	return desc, nil
+}
+
+// validateAndNormalizePaths validates and normalizes the partial snapshot paths.
+func (c *Creator) validateAndNormalizePaths(paths []string, worktreeName string) ([]string, error) {
+	wtMgr := worktree.NewManager(c.repoRoot)
+	wtPath := wtMgr.Path(worktreeName)
+
+	var normalized []string
+	for _, p := range paths {
+		// Clean the path
+		p = filepath.Clean(p)
+
+		// Ensure it's relative
+		if filepath.IsAbs(p) {
+			return nil, fmt.Errorf("path must be relative: %s", p)
+		}
+
+		// Check for path traversal attempts
+		if strings.Contains(p, "..") {
+			return nil, fmt.Errorf("path cannot contain '..': %s", p)
+		}
+
+		// Build full path and verify it exists within worktree
+		fullPath := filepath.Join(wtPath, p)
+		if _, err := os.Stat(fullPath); os.IsNotExist(err) {
+			return nil, fmt.Errorf("path does not exist: %s", p)
+		}
+
+		// Verify it's within worktree
+		absWtPath, err := filepath.Abs(wtPath)
+		if err != nil {
+			return nil, fmt.Errorf("resolve worktree path: %w", err)
+		}
+		absFullPath, err := filepath.Abs(fullPath)
+		if err != nil {
+			return nil, fmt.Errorf("resolve full path: %w", err)
+		}
+
+		rel, err := filepath.Rel(absWtPath, absFullPath)
+		if err != nil || strings.HasPrefix(rel, "..") {
+			return nil, fmt.Errorf("path is outside worktree: %s", p)
+		}
+
+		normalized = append(normalized, p)
+	}
+
+	// Remove duplicates
+	seen := make(map[string]bool)
+	var unique []string
+	for _, p := range normalized {
+		if !seen[p] {
+			seen[p] = true
+			unique = append(unique, p)
+		}
+	}
+
+	return unique, nil
+}
+
+// clonePaths clones only the specified paths from source to destination.
+func (c *Creator) clonePaths(src, dst string, paths []string) error {
+	for _, p := range paths {
+		srcPath := filepath.Join(src, p)
+		dstPath := filepath.Join(dst, p)
+
+		// Get source info
+		info, err := os.Stat(srcPath)
+		if err != nil {
+			return fmt.Errorf("stat %s: %w", p, err)
+		}
+
+		if info.IsDir() {
+			// Clone directory tree
+			if _, err := c.engine.Clone(srcPath, dstPath); err != nil {
+				return fmt.Errorf("clone directory %s: %w", p, err)
+			}
+		} else {
+			// Clone single file - ensure parent dir exists
+			if err := os.MkdirAll(filepath.Dir(dstPath), 0755); err != nil {
+				return fmt.Errorf("create parent dir for %s: %w", p, err)
+			}
+			if _, err := c.engine.Clone(srcPath, dstPath); err != nil {
+				return fmt.Errorf("clone file %s: %w", p, err)
+			}
+		}
+	}
+	return nil
+}
+
+// getSnapshotSize calculates the total size of a snapshot in bytes.
+func (c *Creator) getSnapshotSize(snapshotID model.SnapshotID) int64 {
+	snapshotDir := filepath.Join(c.repoRoot, ".jvs", "snapshots", string(snapshotID))
+	var size int64
+
+	filepath.Walk(snapshotDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil || info.IsDir() || path == snapshotDir {
+			return nil
+		}
+		// Skip .READY marker
+		if filepath.Base(path) == ".READY" {
+			return nil
+		}
+		size += info.Size()
+		return nil
+	})
+
+	return size
 }
 
 func (c *Creator) writeIntent(path string, intent *model.IntentRecord) error {
