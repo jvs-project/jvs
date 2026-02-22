@@ -149,6 +149,78 @@ Realistic workloads with varying file sizes:
 
 ---
 
+## Unit Benchmark Results (2024-02-23)
+
+**Test Environment:**
+| Component | Specification |
+|-----------|---------------|
+| **CPU** | Intel Core Ultra 9 285H |
+| **OS** | Linux 6.18.8-1-MANJARO |
+| **Go Version** | go1.22.0 linux/amd64 |
+
+### Snapshot Creation Benchmarks
+
+| Benchmark | Size/Count | Ops/sec | Time/op | Memory/op | Allocs/op |
+|----------|------------|---------|---------|-----------|-----------|
+| Copy Engine (Small) | 1 KB | 1,738 | 575 µs | 2.26 MB | 53K |
+| Copy Engine (Medium) | 1 MB | 416 | 2.4 ms | 627 KB | 14K |
+| Reflink Engine (Small) | 1 KB | 1,675 | 597 µs | 2.23 MB | 52K |
+| Reflink Engine (Medium) | 1 MB | 367 | 2.7 ms | 780 KB | 17K |
+| MultiFile | 100 files | 292 | 3.4 ms | 4.0 MB | 10K |
+| MultiFile (Large) | 1000 files | 36 | 28 ms | 37 MB | 47K |
+
+### Metadata Operation Benchmarks
+
+| Benchmark | Ops/sec | Time/op | Memory/op | Allocs/op |
+|----------|---------|---------|-----------|-----------|
+| Descriptor Serialization | 1.9M | 760 ns | 496 B | 2 |
+| Descriptor Deserialization | 507K | 2.5 µs | 792 B | 19 |
+| Load Descriptor | 259K | 5.7 µs | 1.66 KB | 19 |
+| Verify (Checksum only) | 92K | 12.4 µs | 4.77 KB | 78 |
+| Verify (With Payload) | 19K | 55.7 µs | 40.4 KB | 119 |
+| Compute Checksum | 195K | 5.85 µs | 4.19 KB | 79 |
+| ListAll (Empty) | 67K | 15.3 µs | 264 B | 5 |
+| ListAll (Single) | 179K | 7.9 µs | 2.06 KB | 29 |
+| ListAll (50 snapshots) | 4.5K | 273 µs | 92.8 KB | 1.2K |
+| Find (By tag) | 41K | 32 µs | 9.79 KB | 144 |
+| Find (By worktree) | 21K | 61 µs | 19.1 KB | 250 |
+| FindByTag | 179K | 7.9 µs | 2.11 KB | 33 |
+
+### Worktree Fork Benchmarks
+
+| Benchmark | Size/Count | Ops/sec | Time/op | Memory/op | Allocs/op |
+|----------|------------|---------|---------|-----------|-----------|
+| Copy Engine (Small) | 1 KB | 244 | 4.1 ms | 1.77 MB | 32K |
+| Copy Engine (Medium) | 1 MB | 503 | 2.0 ms | 808 KB | 15K |
+| Reflink (100KB) | 100 KB | 316 | 3.2 ms | 1.32 MB | 24K |
+| MultiFile | 100 files | 658 | 1.5 ms | 326 KB | 5K |
+| MultiFile (Large) | 1000 files | 16 | 126 ms | 1.42 MB | 19K |
+
+### Worktree Metadata Benchmarks
+
+| Benchmark | Ops/sec | Time/op | Memory/op | Allocs/op |
+|----------|---------|---------|-----------|-----------|
+| List (10 worktrees) | 14K | 45 µs | 16.1 KB | 169 |
+| Get (Load config) | 148K | 3.9 µs | 1.30 KB | 12 |
+| SetLatest | 30K | 17 µs | 2.94 KB | 31 |
+
+### Garbage Collection Benchmarks
+
+| Benchmark | Snapshots | Ops/sec | Time/op | Memory/op | Allocs/op |
+|----------|-----------|---------|---------|-----------|-----------|
+| Plan (Small) | 10 | 7,547 | 133 µs | 32.3 KB | 388 |
+| Plan (Medium) | 100 | 1,513 | 661 µs | 225 KB | 2.5K |
+| Plan (Large) | 1000 | 132 | 7.6 ms | 2.23 MB | 23K |
+| Plan (With Deletable) | 100/50 | 2,359 | 424 µs | 133 KB | 1.4K |
+| Run (Delete Single) | ~1 | 227 | 4.4 ms | 1.89 MB | 38K |
+| Run (Delete Multiple) | ~10 | 24 | 42 ms | 17.2 MB | 358K |
+| Lineage Traversal | 100 | 1,553 | 644 µs | 225 KB | 2.5K |
+| Empty Repo | 0 | 36,091 | 28 µs | 5.29 KB | 64 |
+| With Pins (20) | 50 | 2,002 | 500 µs | 146 KB | 1.6K |
+| With Intents (10) | 50 | 2,837 | 352 µs | 127 KB | 1.4K |
+
+---
+
 ## Baseline Measurements (v7.2)
 
 ### Test Environment

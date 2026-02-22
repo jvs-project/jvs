@@ -1,6 +1,7 @@
 package worktree_test
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -62,7 +63,7 @@ func setupForkBenchRepoWithFiles(b *testing.B, fileCount int) string {
 
 	// Create multiple files
 	for i := 0; i < fileCount; i++ {
-		subDir := filepath.Join(mainPath, "dir"+string(rune(i%3)))
+		subDir := filepath.Join(mainPath, fmt.Sprintf("dir%d", i%3))
 		if err := os.MkdirAll(subDir, 0755); err != nil {
 			b.Fatal(err)
 		}
@@ -70,7 +71,7 @@ func setupForkBenchRepoWithFiles(b *testing.B, fileCount int) string {
 		for j := range data {
 			data[j] = byte((i + j) % 256)
 		}
-		filePath := filepath.Join(subDir, "file"+string(rune(i))+".dat")
+		filePath := filepath.Join(subDir, fmt.Sprintf("file%d.dat", i))
 		if err := os.WriteFile(filePath, data, 0644); err != nil {
 			b.Fatal(err)
 		}
@@ -99,7 +100,7 @@ func BenchmarkWorktreeFork_Small(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		wtName := "fork-" + string(rune(i%10))
+		wtName := fmt.Sprintf("fork%d", i%10)
 		_, err := wtMgr.Fork(desc.SnapshotID, wtName, wrapCloneFunc(eng))
 		if err != nil {
 			b.Fatal(err)
@@ -123,7 +124,7 @@ func BenchmarkWorktreeFork_Medium(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		wtName := "fork-" + string(rune(i%10))
+		wtName := fmt.Sprintf("fork%d", i%10)
 		_, err := wtMgr.Fork(desc.SnapshotID, wtName, wrapCloneFunc(eng))
 		if err != nil {
 			b.Fatal(err)
@@ -146,7 +147,7 @@ func BenchmarkWorktreeFork_Reflink(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		wtName := "fork-" + string(rune(i%10))
+		wtName := fmt.Sprintf("fork%d", i%10)
 		_, err := wtMgr.Fork(desc.SnapshotID, wtName, wrapCloneFunc(eng))
 		if err != nil {
 			b.Fatal(err)
@@ -169,7 +170,7 @@ func BenchmarkWorktreeFork_MultiFile(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		wtName := "fork-" + string(rune(i%10))
+		wtName := fmt.Sprintf("fork%d", i%10)
 		_, err := wtMgr.Fork(desc.SnapshotID, wtName, wrapCloneFunc(eng))
 		if err != nil {
 			b.Fatal(err)
@@ -193,7 +194,7 @@ func BenchmarkWorktreeFork_MultiFile_Large(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
-		wtName := "fork-" + string(rune(i%10))
+		wtName := fmt.Sprintf("fork%d", i%10)
 		_, err := wtMgr.Fork(desc.SnapshotID, wtName, wrapCloneFunc(eng))
 		if err != nil {
 			b.Fatal(err)
@@ -214,7 +215,7 @@ func BenchmarkWorktreeList(b *testing.B) {
 
 	// Create 10 worktrees
 	for i := 0; i < 10; i++ {
-		wtName := "wt" + string(rune(i))
+		wtName := fmt.Sprintf("wt%d", i)
 		if _, err := wtMgr.Create(wtName, nil); err != nil {
 			b.Fatal(err)
 		}
