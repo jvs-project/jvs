@@ -476,6 +476,7 @@ func createTestRootCmd() *cobra.Command {
 	snapshotPaths = nil
 	snapshotCompression = ""
 	restoreInteractive = false
+	gcPlanID = ""
 
 	// Create a new root command
 	cmd := &cobra.Command{
@@ -499,6 +500,9 @@ func createTestRootCmd() *cobra.Command {
 	cmd.AddCommand(verifyCmd)
 	cmd.AddCommand(gcCmd)
 	cmd.AddCommand(completionCmd)
+	cmd.AddCommand(configCmd)
+	cmd.AddCommand(diffCmd)
+	cmd.AddCommand(conformanceCmd)
 
 	return cmd
 }
