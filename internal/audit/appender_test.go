@@ -3,10 +3,12 @@ package audit_test
 import (
 	"bufio"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/jvs-project/jvs/internal/audit"
 	"github.com/jvs-project/jvs/pkg/model"
@@ -124,4 +126,425 @@ func TestFileAppender_GetLastRecordHash(t *testing.T) {
 	hash, err = appender.GetLastRecordHash()
 	require.NoError(t, err)
 	assert.NotEmpty(t, hash)
+}
+
+func TestFileAppender_AppendWithDetails(t *testing.T) {
+	dir := t.TempDir()
+	logPath := filepath.Join(dir, "audit.jsonl")
+
+	appender := audit.NewFileAppender(logPath)
+
+	details := map[string]any{
+		"files_added":   5,
+		"files_removed": 2,
+		"note":          "test snapshot",
+	}
+
+	err := appender.Append(model.EventTypeSnapshotCreate, "main", "snap123", details)
+	require.NoError(t, err)
+
+	// Read and verify
+	file, err := os.Open(logPath)
+	require.NoError(t, err)
+	defer file.Close()
+
+	var record model.AuditRecord
+	scanner := bufio.NewScanner(file)
+	require.True(t, scanner.Scan())
+	require.NoError(t, json.Unmarshal(scanner.Bytes(), &record))
+
+	assert.Equal(t, "main", record.WorktreeName)
+	assert.Equal(t, model.SnapshotID("snap123"), record.SnapshotID)
+	assert.NotNil(t, record.Details)
+	assert.Equal(t, float64(5), record.Details["files_added"])
+}
+
+func TestFileAppender_HashChainConsistent(t *testing.T) {
+	dir := t.TempDir()
+	logPath := filepath.Join(dir, "audit.jsonl")
+
+	appender := audit.NewFileAppender(logPath)
+
+	// Append multiple records
+	ids := []model.SnapshotID{model.SnapshotID("id1"), model.SnapshotID("id2"), model.SnapshotID("id3")}
+	for _, id := range ids {
+		err := appender.Append(model.EventTypeSnapshotCreate, "main", id, nil)
+		require.NoError(t, err)
+	}
+
+	// Read all records
+	file, err := os.Open(logPath)
+	require.NoError(t, err)
+	defer file.Close()
+
+	var records []model.AuditRecord
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		var r model.AuditRecord
+		require.NoError(t, json.Unmarshal(scanner.Bytes(), &r))
+		records = append(records, r)
+	}
+
+	require.Len(t, records, 3)
+
+	// Verify hash chain
+	assert.Equal(t, model.HashValue(""), records[0].PrevHash)
+	assert.Equal(t, records[0].RecordHash, records[1].PrevHash)
+	assert.Equal(t, records[1].RecordHash, records[2].PrevHash)
+}
+
+func TestFileAppender_MalformedLinesSkipped(t *testing.T) {
+	dir := t.TempDir()
+	logPath := filepath.Join(dir, "audit.jsonl")
+
+	// Create a file with some valid and malformed lines
+	require.NoError(t, os.MkdirAll(filepath.Dir(logPath), 0755))
+	file, err := os.Create(logPath)
+	require.NoError(t, err)
+
+	// Write a valid record
+	validRecord := model.AuditRecord{
+		Timestamp:    time.Now(),
+		EventType:    model.EventTypeSnapshotCreate,
+		SnapshotID:   "snap1",
+		WorktreeName: "main",
+		RecordHash:   "hash1",
+	}
+	validLine, _ := json.Marshal(validRecord)
+	file.Write(append(validLine, '\n'))
+
+	// Write a malformed line
+	file.Write([]byte("not valid json\n"))
+
+	// Write another valid record
+	validRecord2 := model.AuditRecord{
+		Timestamp:    time.Now(),
+		EventType:    model.EventTypeRestore,
+		SnapshotID:   "snap2",
+		WorktreeName: "main",
+		RecordHash:   "hash2",
+		PrevHash:     "hash1",
+	}
+	validLine2, _ := json.Marshal(validRecord2)
+	file.Write(append(validLine2, '\n'))
+
+	file.Close()
+
+	// GetLastRecordHash should skip malformed line and return last valid hash
+	appender := audit.NewFileAppender(logPath)
+	hash, err := appender.GetLastRecordHash()
+	require.NoError(t, err)
+	assert.Equal(t, model.HashValue("hash2"), hash)
+}
+
+func TestFileAppender_ConcurrentWithHashChain(t *testing.T) {
+	dir := t.TempDir()
+	logPath := filepath.Join(dir, "audit.jsonl")
+
+	appender := audit.NewFileAppender(logPath)
+
+	var wg sync.WaitGroup
+	numGoroutines := 20
+	recordsPerGoroutine := 5
+
+	for i := 0; i < numGoroutines; i++ {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			for j := 0; j < recordsPerGoroutine; j++ {
+				snapID := model.SnapshotID(fmt.Sprintf("snap-%d-%d", idx, j))
+				appender.Append(model.EventTypeSnapshotCreate, "main", snapID, nil)
+			}
+		}(i)
+	}
+	wg.Wait()
+
+	// Verify all records were written and hash chain is intact
+	file, err := os.Open(logPath)
+	require.NoError(t, err)
+	defer file.Close()
+
+	var records []model.AuditRecord
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		var r model.AuditRecord
+		require.NoError(t, json.Unmarshal(scanner.Bytes(), &r))
+		records = append(records, r)
+	}
+
+	expectedCount := numGoroutines * recordsPerGoroutine
+	assert.Equal(t, expectedCount, len(records))
+
+	// Verify hash chain integrity
+	for i := 1; i < len(records); i++ {
+		assert.Equal(t, records[i-1].RecordHash, records[i].PrevHash,
+			"Hash chain broken at record %d", i)
+	}
+}
+
+func TestFileAppender_DirectoryCreation(t *testing.T) {
+	dir := t.TempDir()
+	logPath := filepath.Join(dir, "subdir", "nested", "audit.jsonl")
+
+	// Directory doesn't exist yet
+	_, err := os.Stat(filepath.Dir(logPath))
+	assert.True(t, os.IsNotExist(err))
+
+	appender := audit.NewFileAppender(logPath)
+	err = appender.Append(model.EventTypeSnapshotCreate, "main", "id1", nil)
+	require.NoError(t, err)
+
+	// Directory should now exist
+	info, err := os.Stat(filepath.Dir(logPath))
+	require.NoError(t, err)
+	assert.True(t, info.IsDir())
+}
+
+func TestFileAppender_EmptyDetails(t *testing.T) {
+	dir := t.TempDir()
+	logPath := filepath.Join(dir, "audit.jsonl")
+
+	appender := audit.NewFileAppender(logPath)
+
+	// Append with empty details map
+	err := appender.Append(model.EventTypeSnapshotCreate, "main", "id1", map[string]any{})
+	require.NoError(t, err)
+
+	// Read and verify
+	file, err := os.Open(logPath)
+	require.NoError(t, err)
+	defer file.Close()
+
+	var record model.AuditRecord
+	scanner := bufio.NewScanner(file)
+	require.True(t, scanner.Scan())
+	require.NoError(t, json.Unmarshal(scanner.Bytes(), &record))
+
+	// Empty map gets marshaled as {} and unmarshaled as nil
+	assert.Equal(t, model.EventTypeSnapshotCreate, record.EventType)
+	assert.Equal(t, "main", record.WorktreeName)
+}
+
+func TestFileAppender_NilDetails(t *testing.T) {
+	dir := t.TempDir()
+	logPath := filepath.Join(dir, "audit.jsonl")
+
+	appender := audit.NewFileAppender(logPath)
+
+	// Append with nil details
+	err := appender.Append(model.EventTypeSnapshotCreate, "main", "id1", nil)
+	require.NoError(t, err)
+
+	// Read and verify
+	file, err := os.Open(logPath)
+	require.NoError(t, err)
+	defer file.Close()
+
+	var record model.AuditRecord
+	scanner := bufio.NewScanner(file)
+	require.True(t, scanner.Scan())
+	require.NoError(t, json.Unmarshal(scanner.Bytes(), &record))
+
+	// Nil details should still produce a valid record
+	assert.Equal(t, model.EventTypeSnapshotCreate, record.EventType)
+	assert.Equal(t, "main", record.WorktreeName)
+}
+
+func TestFileAppender_EmptySnapshotID(t *testing.T) {
+	dir := t.TempDir()
+	logPath := filepath.Join(dir, "audit.jsonl")
+
+	appender := audit.NewFileAppender(logPath)
+
+	// Some events don't have a snapshot ID (e.g., worktree operations)
+	err := appender.Append(model.EventTypeWorktreeCreate, "feature", "", nil)
+	require.NoError(t, err)
+
+	// Read and verify
+	file, err := os.Open(logPath)
+	require.NoError(t, err)
+	defer file.Close()
+
+	var record model.AuditRecord
+	scanner := bufio.NewScanner(file)
+	require.True(t, scanner.Scan())
+	require.NoError(t, json.Unmarshal(scanner.Bytes(), &record))
+
+	assert.Equal(t, model.EventTypeWorktreeCreate, record.EventType)
+	assert.Equal(t, model.SnapshotID(""), record.SnapshotID)
+	assert.Equal(t, "feature", record.WorktreeName)
+}
+
+func TestFileAppender_AllEventTypes(t *testing.T) {
+	dir := t.TempDir()
+	logPath := filepath.Join(dir, "audit.jsonl")
+
+	appender := audit.NewFileAppender(logPath)
+
+	eventTypes := []model.AuditEventType{
+		model.EventTypeSnapshotCreate,
+		model.EventTypeRestore,
+		model.EventTypeWorktreeCreate,
+		model.EventTypeWorktreeRemove,
+		model.EventTypeGCRun,
+	}
+
+	for _, eventType := range eventTypes {
+		err := appender.Append(eventType, "main", "snap123", nil)
+		require.NoError(t, err)
+	}
+
+	// Verify all events were logged
+	file, err := os.Open(logPath)
+	require.NoError(t, err)
+	defer file.Close()
+
+	var records []model.AuditRecord
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		var r model.AuditRecord
+		require.NoError(t, json.Unmarshal(scanner.Bytes(), &r))
+		records = append(records, r)
+	}
+
+	assert.Equal(t, len(eventTypes), len(records))
+
+	// Verify each event type in order
+	for i, expectedType := range eventTypes {
+		assert.Equal(t, expectedType, records[i].EventType)
+	}
+}
+
+func TestFileAppender_LargeDetailsMap(t *testing.T) {
+	dir := t.TempDir()
+	logPath := filepath.Join(dir, "audit.jsonl")
+
+	appender := audit.NewFileAppender(logPath)
+
+	// Create a large details map
+	details := make(map[string]any)
+	for i := 0; i < 100; i++ {
+		details[fmt.Sprintf("key%d", i)] = fmt.Sprintf("value%d with some longer text", i)
+	}
+
+	err := appender.Append(model.EventTypeSnapshotCreate, "main", "snap123", details)
+	require.NoError(t, err)
+
+	// Read and verify
+	file, err := os.Open(logPath)
+	require.NoError(t, err)
+	defer file.Close()
+
+	var record model.AuditRecord
+	scanner := bufio.NewScanner(file)
+	require.True(t, scanner.Scan())
+	require.NoError(t, json.Unmarshal(scanner.Bytes(), &record))
+
+	assert.Equal(t, 100, len(record.Details))
+	assert.Equal(t, "value99 with some longer text", record.Details["key99"])
+}
+
+func TestFileAppender_SpecialCharactersInDetails(t *testing.T) {
+	dir := t.TempDir()
+	logPath := filepath.Join(dir, "audit.jsonl")
+
+	appender := audit.NewFileAppender(logPath)
+
+	details := map[string]any{
+		"note":     "Test with quotes: \"hello\" and 'world'",
+		"path":     "/path/to/file with spaces.txt",
+		"unicode":  "Hello 世界 🌍",
+		"newlines": "line1\nline2\nline3",
+		"special":  "!@#$%^&*()_+-=[]{}|;':\",./<>?",
+	}
+
+	err := appender.Append(model.EventTypeSnapshotCreate, "main", "snap123", details)
+	require.NoError(t, err)
+
+	// Read and verify
+	file, err := os.Open(logPath)
+	require.NoError(t, err)
+	defer file.Close()
+
+	var record model.AuditRecord
+	scanner := bufio.NewScanner(file)
+	require.True(t, scanner.Scan())
+	require.NoError(t, json.Unmarshal(scanner.Bytes(), &record))
+
+	assert.Equal(t, "Test with quotes: \"hello\" and 'world'", record.Details["note"])
+	assert.Equal(t, "Hello 世界 🌍", record.Details["unicode"])
+	assert.Equal(t, "line1\nline2\nline3", record.Details["newlines"])
+}
+
+func TestFileAppender_NestedDetails(t *testing.T) {
+	dir := t.TempDir()
+	logPath := filepath.Join(dir, "audit.jsonl")
+
+	appender := audit.NewFileAppender(logPath)
+
+	details := map[string]any{
+		"files": []map[string]any{
+			{"path": "file1.txt", "size": 1024},
+			{"path": "file2.txt", "size": 2048},
+		},
+		"metadata": map[string]any{
+			"author":  "test",
+			"version": 1.0,
+			"tags":    []string{"tag1", "tag2"},
+		},
+		"count": 42,
+	}
+
+	err := appender.Append(model.EventTypeSnapshotCreate, "main", "snap123", details)
+	require.NoError(t, err)
+
+	// Read and verify
+	file, err := os.Open(logPath)
+	require.NoError(t, err)
+	defer file.Close()
+
+	var record model.AuditRecord
+	scanner := bufio.NewScanner(file)
+	require.True(t, scanner.Scan())
+	require.NoError(t, json.Unmarshal(scanner.Bytes(), &record))
+
+	assert.NotNil(t, record.Details["files"])
+	assert.NotNil(t, record.Details["metadata"])
+	assert.Equal(t, float64(42), record.Details["count"])
+}
+
+func TestFileAppender_NumericDetails(t *testing.T) {
+	dir := t.TempDir()
+	logPath := filepath.Join(dir, "audit.jsonl")
+
+	appender := audit.NewFileAppender(logPath)
+
+	details := map[string]any{
+		"int_val":    42,
+		"float_val":  3.14159,
+		"neg_int":    -100,
+		"zero":       0,
+		"large":      9007199254740991, // Max safe integer
+		"bool_true":  true,
+		"bool_false": false,
+	}
+
+	err := appender.Append(model.EventTypeSnapshotCreate, "main", "snap123", details)
+	require.NoError(t, err)
+
+	// Read and verify
+	file, err := os.Open(logPath)
+	require.NoError(t, err)
+	defer file.Close()
+
+	var record model.AuditRecord
+	scanner := bufio.NewScanner(file)
+	require.True(t, scanner.Scan())
+	require.NoError(t, json.Unmarshal(scanner.Bytes(), &record))
+
+	assert.Equal(t, float64(42), record.Details["int_val"])
+	assert.Equal(t, 3.14159, record.Details["float_val"])
+	assert.Equal(t, float64(-100), record.Details["neg_int"])
+	assert.Equal(t, true, record.Details["bool_true"])
+	assert.Equal(t, false, record.Details["bool_false"])
 }
