@@ -58,6 +58,35 @@ JVS maintains a target of **80%+ test coverage** for production readiness.
 - New features must include tests
 - Use `go test -cover ./...` to check coverage
 
+### Regression Tests
+
+When fixing bugs, add a regression test to prevent recurrence. See `test/regression/REGRESSION_TESTS.md` for details.
+
+```bash
+# Run regression tests
+go test -tags conformance -v ./test/regression/...
+```
+
+**Regression test format:**
+
+1. Name the test `TestRegression_<IssueNumber>_<BriefDescription>`
+2. Document the bug with a comment block (issue, date fixed, PR)
+3. Test the exact scenario that caused the bug
+4. Update `test/regression/REGRESSION_TESTS.md` catalog
+
+Example:
+
+```go
+// TestRegression_123_GarbageCollectionLeak tests GC cleanup.
+//
+// Bug: GC was not cleaning up orphaned snapshots when parent was deleted
+// Fixed: 2024-02-20, PR #456
+// Issue: #123
+func TestRegression_123_GarbageCollectionLeak(t *testing.T) {
+    // Test the exact scenario that caused the bug
+}
+```
+
 ## Code Style Guidelines
 
 ### Go Conventions
@@ -102,6 +131,50 @@ return fmt.Errorf("failed to read descriptor: %w", err)
 - **Exported types**: Must have documentation
 - **Complex logic**: Add explanatory comments
 - **TODOs**: Use `// TODO:` for future work
+
+## Developer Certificate of Origin (DCO)
+
+All contributions to JVS must follow the [Developer Certificate of Origin (DCO)](https://developercertificate.org/). This requirement is part of our commitment to the CNCF/CII Best Practices Badge.
+
+### What is DCO?
+
+DCO is a simple statement that you have the right to submit your contribution and that it follows the project's license (MIT).
+
+### How to Add DCO Sign-off
+
+Every commit must include a `Signed-off-by` line. You can add it automatically:
+
+```bash
+# Configure git to automatically sign off commits
+git config --local commit.signoff true
+
+# Or manually add sign-off when committing
+git commit -m "feat: add new feature" --signoff
+```
+
+The sign-off line will look like:
+
+```
+feat(snapshot): add --tag flag for snapshot tagging
+
+Users can now attach tags during snapshot creation.
+
+Signed-off-by: Your Name <your.email@example.com>
+```
+
+### DCO Enforcement
+
+- **CI Check**: All pull requests must pass the DCO check in CI
+- **Automatic Verification**: CI checks every commit in the PR for proper sign-off
+- **Failed Checks**: If DCO check fails, amend your commits with sign-off:
+
+```bash
+# Amend the most recent commit
+git commit --amend --signoff
+
+# Or amend multiple commits interactively
+git rebase -i HEAD~n  # Use 'reword' for each commit
+```
 
 ## Commit Message Conventions
 
@@ -162,6 +235,7 @@ Closes #145
 4. **Add tests** for new functionality
 5. **Update CHANGELOG** for user-visible changes
 6. **Run `make verify`** and fix any issues
+7. **Ensure all commits have DCO sign-off** (`git commit --signoff`)
 
 ### PR Description Template
 
@@ -188,6 +262,7 @@ Brief description of changes
 - [ ] No new warnings generated
 - [ ] Specs updated if applicable
 - [ ] CHANGELOG.md updated
+- [ ] All commits have DCO sign-off (`Signed-off-by` line)
 ```
 
 ### Review Process
@@ -224,7 +299,9 @@ jvs/
 │   ├── pathutil/      # Path utilities
 │   ├── progress/      # Progress reporting
 │   └── uuidutil/      # UUID generation
-├── test/conformance/  # Conformance tests (29 mandatory)
+├── test/              # Test suites
+│   ├── conformance/   # Conformance tests (29+ mandatory)
+│   └── regression/    # Regression tests for fixed bugs
 ├── docs/              # Specification documents
 └── Makefile           # Build automation
 ```

@@ -1,5 +1,9 @@
 # JVS (Juicy Versioned Workspaces)
 
+[![CII Best Practices](https://bestpractices.coreinfrastructure.org/projects?jvs-project/badge)](https://bestpractices.coreinfrastructure.org/projects?jvs-project)
+[![Go Report Card](https://goreportcard.com/badge/github.com/jvs-project/jvs)](https://goreportcard.com/report/github.com/jvs-project/jvs)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 **Snapshot-native workspace versioning on top of JuiceFS.**
 
 JVS versions full workspaces as snapshots and provides navigable, verifiable, tamper-evident history.
@@ -30,6 +34,8 @@ make build
 ```
 
 ## Quickstart
+
+> **New to JVS?** See the [Quick Start Guide](docs/QUICKSTART.md) for a 5-minute tutorial.
 
 ### 1) Prepare a JuiceFS mount (optional but recommended)
 ```bash
@@ -110,5 +116,11 @@ jvs verify --all
 ## Migration / backup
 Use `juicefs sync` and exclude runtime state (active `.jvs/intents`).
 See `docs/18_MIGRATION_AND_BACKUP.md`.
+
+## Upgrading JVS
+See [UPGRADE.md](UPGRADE.md) for upgrade guides between versions, including:
+- v6.x to v7.0 migration (detached state model)
+- Backup recommendations
+- Post-upgrade verification steps
 
 **Spec version:** v7.0 (2026-02-22)

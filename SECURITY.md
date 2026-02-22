@@ -117,6 +117,19 @@ JVS relies on OS-level filesystem permissions for access control:
 - [Security Model Specification](docs/09_SECURITY_MODEL.md)
 - [Threat Model](docs/10_THREAT_MODEL.md)
 - [Conformance Test Plan](docs/11_CONFORMANCE_TEST_PLAN.md) (includes integrity tests)
+- [Release Signing and Verification](docs/SIGNING.md) (binary signature verification)
+
+## Release Verification
+
+All JVS releases are cryptographically signed using Sigstore/cosign. Before using any downloaded binary, verify its authenticity:
+
+```bash
+cosign verify-blob jvs-linux-amd64 \
+  --certificate-identity https://github.com/jvs-project/jvs/.github/workflows/ci.yml@refs/tags/vX.Y.Z \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+```
+
+See [docs/SIGNING.md](docs/SIGNING.md) for complete verification instructions.
 
 ---
 

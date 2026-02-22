@@ -193,6 +193,7 @@ We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
 ## Related Documents
 
 - [CHANGELOG.md](docs/99_CHANGELOG.md) - Detailed version history
+- [UPGRADE.md](UPGRADE.md) - Upgrade guide and version compatibility
 - [CONSTITUTION.md](docs/CONSTITUTION.md) - Core principles and non-goals
 - [GOVERNANCE.md](GOVERNANCE.md) - Project governance and roles
 - [CII_BADGE_ASSESSMENT.md](docs/CII_BADGE_ASSESSMENT.md) - Best practices badge progress
