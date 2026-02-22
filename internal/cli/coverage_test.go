@@ -244,6 +244,37 @@ func TestResolveSnapshotForDiff(t *testing.T) {
 		assert.Error(t, err)
 	})
 
+	t.Run("Resolve HEAD successfully after creating snapshot", func(t *testing.T) {
+		// Create a snapshot first
+		assert.NoError(t, os.Chdir(mainPath))
+		assert.NoError(t, os.WriteFile("headtest.txt", []byte("head test"), 0644))
+
+		cmd3 := createTestRootCmd()
+		stdout, _ := executeCommand(cmd3, "snapshot", "for HEAD test", "--json")
+
+		// Extract snapshot ID
+		lines := strings.Split(stdout, "\n")
+		var snapshotID string
+		for _, line := range lines {
+			if strings.Contains(line, `"snapshot_id"`) {
+				parts := strings.Split(line, `"`)
+				for i, p := range parts {
+					if p == "snapshot_id" && i+2 < len(parts) {
+						snapshotID = parts[i+2]
+						break
+					}
+				}
+			}
+		}
+
+		if snapshotID != "" {
+			// Now HEAD should resolve
+			resolved, err := resolveSnapshot(repoPath, "HEAD")
+			assert.NoError(t, err)
+			assert.Equal(t, snapshotID, string(resolved))
+		}
+	})
+
 	t.Run("Resolve with whitespace only", func(t *testing.T) {
 		_, err := resolveSnapshot(repoPath, "   ")
 		assert.Error(t, err)
