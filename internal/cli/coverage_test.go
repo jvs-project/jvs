@@ -142,6 +142,22 @@ func TestDetectEngine_Coverage(t *testing.T) {
 		engine := detectEngine("/tmp")
 		assert.Equal(t, "copy", string(engine))
 	})
+
+	t.Run("Empty string returns Copy as fallback", func(t *testing.T) {
+		engine := detectEngine("")
+		assert.Equal(t, "copy", string(engine))
+	})
+
+	t.Run("Current directory returns valid engine", func(t *testing.T) {
+		// Get current directory which should exist
+		cwd, err := os.Getwd()
+		if err == nil {
+			engine := detectEngine(cwd)
+			assert.NotEmpty(t, string(engine))
+			// Should be one of the valid engines
+			assert.Contains(t, []string{"copy", "reflink-copy", "juicefs-clone"}, string(engine))
+		}
+	})
 }
 
 // TestOutputJSONOrErrorVariations tests outputJSONOrError with various inputs.

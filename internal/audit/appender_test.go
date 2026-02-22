@@ -548,3 +548,62 @@ func TestFileAppender_NumericDetails(t *testing.T) {
 	assert.Equal(t, true, record.Details["bool_true"])
 	assert.Equal(t, false, record.Details["bool_false"])
 }
+
+func TestFileAppender_GetLastRecordHash_MultipleRecords(t *testing.T) {
+	dir := t.TempDir()
+	logPath := filepath.Join(dir, "audit.jsonl")
+
+	appender := audit.NewFileAppender(logPath)
+
+	// Append multiple records
+	for i := 0; i < 5; i++ {
+		err := appender.Append(model.EventTypeSnapshotCreate, "main", model.SnapshotID(fmt.Sprintf("snap%d", i)), nil)
+		require.NoError(t, err)
+	}
+
+	// GetLastRecordHash should return the hash of the last record
+	hash, err := appender.GetLastRecordHash()
+	require.NoError(t, err)
+	assert.NotEmpty(t, hash)
+
+	// Read the file and verify the hash matches the last record
+	file, err := os.Open(logPath)
+	require.NoError(t, err)
+	defer file.Close()
+
+	var records []model.AuditRecord
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		var r model.AuditRecord
+		require.NoError(t, json.Unmarshal(scanner.Bytes(), &r))
+		records = append(records, r)
+	}
+
+	require.Len(t, records, 5)
+	assert.Equal(t, records[4].RecordHash, hash)
+}
+
+func TestFileAppender_RapidSequentialAppends(t *testing.T) {
+	dir := t.TempDir()
+	logPath := filepath.Join(dir, "audit.jsonl")
+
+	appender := audit.NewFileAppender(logPath)
+
+	// Rapidly append records without goroutines
+	for i := 0; i < 100; i++ {
+		err := appender.Append(model.EventTypeSnapshotCreate, "main", model.SnapshotID(fmt.Sprintf("snap%d", i)), nil)
+		require.NoError(t, err)
+	}
+
+	// Verify all records were written
+	file, err := os.Open(logPath)
+	require.NoError(t, err)
+	defer file.Close()
+
+	count := 0
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		count++
+	}
+	assert.Equal(t, 100, count)
+}
