@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"syscall"
 	"testing"
 	"time"
 )
@@ -28,10 +27,9 @@ func TestDefaultConfig(t *testing.T) {
 
 func TestClientSendSync(t *testing.T) {
 	// Create test server
-	var receivedPayload []byte
-	var receivedSignature string
+	var receivedEvent map[string]interface{}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		receivedPayload, _ = json.Marshal(r.Body)
+		json.NewDecoder(r.Body).Decode(&receivedEvent)
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer server.Close()
@@ -64,17 +62,19 @@ func TestClientSendSync(t *testing.T) {
 		t.Fatalf("Send failed: %v", err)
 	}
 
-	if receivedSignature == "" {
-		t.Error("expected signature header, got none")
+	if receivedEvent == nil {
+		t.Error("expected event to be received")
+	}
+	if receivedEvent["event"] != string(EventSnapshotCreated) {
+		t.Errorf("expected event %s, got %v", EventSnapshotCreated, receivedEvent["event"])
 	}
 }
 
 func TestClientSendWithSignature(t *testing.T) {
-	var receivedBody []byte
 	var receivedSignature string
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		receivedBody, _ = json.Marshal(r.Body)
+		_, _ = json.Marshal(r.Body)
 		receivedSignature = r.Header.Get("X-JVS-Signature")
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -284,16 +284,12 @@ func TestClientWildcardEvent(t *testing.T) {
 }
 
 func TestClientEventFiltering(t *testing.T) {
-	snapshotCalled := false
-	restoreCalled := false
+	var receivedEventType string
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		event := r.Header.Get("X-JVS-Event")
-		if event == string(EventSnapshotCreated) {
-			snapshotCalled = true
-		} else if event == string(EventRestoreComplete) {
-			restoreCalled = true
-		}
+		var payload map[string]interface{}
+		json.NewDecoder(r.Body).Decode(&payload)
+		receivedEventType = payload["event"].(string)
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer server.Close()
@@ -313,14 +309,16 @@ func TestClientEventFiltering(t *testing.T) {
 	defer client.Close()
 
 	// Send snapshot event - should be called
+	receivedEventType = ""
 	client.Send(Event{Event: EventSnapshotCreated}, false)
-	if !snapshotCalled {
-		t.Error("snapshot hook should have been called")
+	if receivedEventType != string(EventSnapshotCreated) {
+		t.Errorf("snapshot hook should have been called, got event: %s", receivedEventType)
 	}
 
-	// Send restore event - should NOT be called
+	// Send restore event - should NOT be called (eventType remains unchanged)
+	receivedEventType = ""
 	client.Send(Event{Event: EventRestoreComplete}, false)
-	if restoreCalled {
+	if receivedEventType == string(EventRestoreComplete) {
 		t.Error("restore hook should not have been called")
 	}
 }

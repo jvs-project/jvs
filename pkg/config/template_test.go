@@ -14,7 +14,7 @@ func TestSnapshotTemplate_ResolveTemplate(t *testing.T) {
 		wantTags []string
 	}
 
-	tests := []templateTest{{
+	tests := []templateTest{
 		{
 			name:     "builtin pre-experiment",
 			template: "pre-experiment",

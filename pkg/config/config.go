@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 
 	"github.com/jvs-project/jvs/pkg/model"
 	"github.com/jvs-project/jvs/pkg/webhook"
@@ -416,5 +417,83 @@ func ListTemplates(repoRoot string) []string {
 		result = append(result, name)
 	}
 	return result
+}
+
+// Validate checks if the webhook configuration is valid.
+func (w *WebhookConfig) Validate() error {
+	for i, hook := range w.Hooks {
+		if hook.URL == "" {
+			return fmt.Errorf("hook[%d]: url is required", i)
+		}
+		if len(hook.Events) == 0 {
+			return fmt.Errorf("hook[%d]: at least one event must be specified", i)
+		}
+	}
+	return nil
+}
+
+// ToWebhookConfig converts WebhookConfig to webhook.Config for use by the webhook package.
+func (w *WebhookConfig) ToWebhookConfig() *webhook.Config {
+	if w == nil {
+		return nil
+	}
+
+	cfg := &webhook.Config{
+		Enabled: w.Enabled,
+		Hooks:   make([]webhook.HookConfig, 0, len(w.Hooks)),
+	}
+
+	// Apply defaults
+	if cfg.MaxRetries == 0 {
+		cfg.MaxRetries = 3
+	}
+	if w.MaxRetries > 0 {
+		cfg.MaxRetries = w.MaxRetries
+	}
+	if w.RetryDelay != "" {
+		if d, err := parseDuration(w.RetryDelay); err == nil {
+			cfg.RetryDelay = d
+		}
+	}
+	if cfg.RetryDelay == 0 {
+		cfg.RetryDelay = 5 * 1000000000 // 5 seconds in nanoseconds
+	}
+	if w.AsyncQueueSize > 0 {
+		cfg.AsyncQueueSize = w.AsyncQueueSize
+	}
+	if cfg.AsyncQueueSize == 0 {
+		cfg.AsyncQueueSize = 100
+	}
+
+	// Convert hooks
+	for _, h := range w.Hooks {
+		hookCfg := webhook.HookConfig{
+			URL:     h.URL,
+			Secret:  h.Secret,
+			Events:  make([]webhook.EventType, 0, len(h.Events)),
+			Enabled: h.Enabled,
+		}
+
+		// Convert event strings to EventType
+		for _, e := range h.Events {
+			hookCfg.Events = append(hookCfg.Events, webhook.EventType(e))
+		}
+
+		// Parse timeout if specified
+		if h.Timeout != "" {
+			if d, err := parseDuration(h.Timeout); err == nil {
+				hookCfg.Timeout = d
+			}
+		}
+
+		cfg.Hooks = append(cfg.Hooks, hookCfg)
+	}
+
+	return cfg
+}
+
+// parseDuration parses a duration string like "5s", "1m", "1h".
+func parseDuration(s string) (time.Duration, error) {
+	return time.ParseDuration(s)
 }
 
