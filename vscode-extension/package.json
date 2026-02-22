@@ -10,8 +10,15 @@
   "categories": [
     "Other"
   ],
+  "keywords": [
+    "juicefs",
+    "versioning",
+    "snapshot",
+    "workspace",
+    "git"
+  ],
   "activationEvents": [
-    "workspaceContains:.jvs"
+    "onStartupFinished"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -62,6 +69,11 @@
         "title": "JVS: Verify All Snapshots",
         "category": "JVS",
         "icon": "$(check)"
+      },
+      {
+        "command": "jvs.snapshot.delete",
+        "title": "JVS: Delete Snapshot",
+        "category": "JVS"
       }
     ],
     "viewsContainers": {
@@ -69,7 +81,7 @@
         {
           "id": "jvs-sidebar",
           "title": "JVS",
-          "icon": "database",
+          "icon": "database.svg",
           "when": "jvs:hasRepo"
         }
       ]
@@ -77,28 +89,64 @@
     "views": {
       "jvs-sidebar": [
         {
-          "id": "jvs.historyView",
-          "name": "History",
-          "when": "jvs:hasRepo"
+          "id": "jvs.historyTree",
+          "name": "Snapshots",
+          "when": "jvs:hasRepo",
+          "icon": "$(camera)",
+          "contextMenuTitles": [
+            {
+              "command": "jvs.snapshot.restore",
+              "title": "Restore"
+            },
+            {
+              "command": "jvs.snapshot.delete",
+              "title": "Delete"
+            }
+          ]
         },
         {
-          "id": "jvs.worktreeView",
-          "name": "Worktree",
-          "when": "jvs:hasRepo"
+          "id": "jvs.worktreeTree",
+          "name": "Worktrees",
+          "when": "jvs:hasRepo",
+          "icon": "$(folder)"
         }
       ]
     },
-    "trees": {
-      "jvs-historyTree": {
-        "treeLabel": "Snapshots",
-        "icon": "$(camera)",
-        "when": "jvs:hasRepo"
-      },
-      "jvs-worktreeTree": {
-        "treeLabel": "Worktrees",
-        "icon": "$(folder)",
-        "when": "jvs:hasRepo"
-      }
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "jvs.snapshot",
+          "when": "jvs:hasRepo"
+        },
+        {
+          "command": "jvs.restore",
+          "when": "jvs:hasRepo"
+        },
+        {
+          "command": "jvs.restoreHead",
+          "when": "jvs:hasRepo"
+        },
+        {
+          "command": "jvs.worktree.fork",
+          "when": "jvs:hasRepo"
+        },
+        {
+          "command": "jvs.verify",
+          "when": "jvs:hasRepo"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "jvs.snapshot",
+          "when": "view == jvs.historyTree",
+          "group": "navigation"
+        },
+        {
+          "command": "jvs.refresh",
+          "when": "view == jvs.historyTree || view == jvs.worktreeTree",
+          "group": "navigation"
+        }
+      ]
     }
   },
   "configuration": {
@@ -121,6 +169,11 @@
         "minimum": 1,
         "maximum": 500,
         "description": "Number of snapshots to show in history"
+      },
+      "jvs.executablePath": {
+        "type": "string",
+        "default": "jvs",
+        "description": "Path to JVS executable"
       }
     }
   }

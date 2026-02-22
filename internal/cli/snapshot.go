@@ -6,6 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/jvs-project/jvs/internal/compression"
 	"github.com/jvs-project/jvs/internal/snapshot"
 	"github.com/jvs-project/jvs/internal/worktree"
 	"github.com/jvs-project/jvs/pkg/config"
@@ -14,8 +15,9 @@ import (
 )
 
 var (
-	snapshotTags  []string
-	snapshotPaths []string
+	snapshotTags       []string
+	snapshotPaths      []string
+	snapshotCompression string
 )
 
 var snapshotCmd = &cobra.Command{
@@ -28,6 +30,12 @@ Use --tag to attach one or more tags to the snapshot.
 
 For partial snapshots of specific paths, use -- followed by paths:
   jvs snapshot "models update" -- models/ data/
+
+Compression can be enabled with --compress:
+  jvs snapshot "checkpoint" --compress fast
+  jvs snapshot "archive" --compress max
+
+Compression levels: none, fast, default, max
 
 NOTE: Cannot create snapshots in detached state. Use 'jvs worktree fork'
 to create a new worktree from the current position first.`,
@@ -94,7 +102,17 @@ to create a new worktree from the current position first.`,
 			engine = defaultEngine
 		}
 
+		// Create creator with compression if specified
 		creator := snapshot.NewCreator(r.Root, engine)
+		if snapshotCompression != "" {
+			comp, err := compression.NewCompressorFromString(snapshotCompression)
+			if err != nil {
+				fmtErr("invalid compression level: %v", err)
+				os.Exit(1)
+			}
+			creator.SetCompression(comp.Level)
+		}
+
 		var desc *model.Descriptor
 
 		if len(snapshotPaths) > 0 {
@@ -118,6 +136,9 @@ to create a new worktree from the current position first.`,
 			} else {
 				fmt.Printf("Created snapshot %s\n", desc.SnapshotID)
 			}
+			if desc.Compression != nil {
+				fmt.Printf("  (compressed: %s level %d)\n", desc.Compression.Type, desc.Compression.Level)
+			}
 		}
 	},
 }
@@ -125,5 +146,6 @@ to create a new worktree from the current position first.`,
 func init() {
 	snapshotCmd.Flags().StringSliceVar(&snapshotTags, "tag", []string{}, "tag for this snapshot (can be repeated)")
 	snapshotCmd.Flags().StringSliceVar(&snapshotPaths, "paths", []string{}, "paths to include in partial snapshot")
+	snapshotCmd.Flags().StringVar(&snapshotCompression, "compress", "", "compression level (none, fast, default, max)")
 	rootCmd.AddCommand(snapshotCmd)
 }

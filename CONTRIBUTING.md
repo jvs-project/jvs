@@ -67,6 +67,18 @@ When fixing bugs, add a regression test to prevent recurrence. See `test/regress
 go test -tags conformance -v ./test/regression/...
 ```
 
+### Fuzzing Tests
+
+Fuzzing tests use randomized inputs to find edge cases and security vulnerabilities. See `test/fuzz/FUZZING.md` for details.
+
+```bash
+# Run all fuzz tests briefly (smoke test)
+go test -fuzz=. -fuzztime=10s ./test/fuzz/...
+
+# Run a specific fuzz target
+go test -fuzz=FuzzValidateName -fuzztime=1m ./test/fuzz/...
+```
+
 **Regression test format:**
 
 1. Name the test `TestRegression_<IssueNumber>_<BriefDescription>`

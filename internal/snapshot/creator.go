@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/jvs-project/jvs/internal/audit"
+	"github.com/jvs-project/jvs/internal/compression"
 	"github.com/jvs-project/jvs/internal/engine"
 	"github.com/jvs-project/jvs/internal/integrity"
 	"github.com/jvs-project/jvs/internal/worktree"
@@ -19,14 +20,20 @@ import (
 
 // Creator handles snapshot creation.
 type Creator struct {
-	repoRoot    string
-	engineType  model.EngineType
-	engine      engine.Engine
-	auditLogger *audit.FileAppender
+	repoRoot       string
+	engineType     model.EngineType
+	engine         engine.Engine
+	auditLogger    *audit.FileAppender
+	compression    *compression.Compressor
 }
 
 // NewCreator creates a new snapshot creator.
 func NewCreator(repoRoot string, engineType model.EngineType) *Creator {
+	return NewCreatorWithCompression(repoRoot, engineType, nil)
+}
+
+// NewCreatorWithCompression creates a new snapshot creator with compression.
+func NewCreatorWithCompression(repoRoot string, engineType model.EngineType, comp *compression.Compressor) *Creator {
 	eng := engine.NewEngine(engineType)
 
 	auditPath := filepath.Join(repoRoot, ".jvs", "audit", "audit.jsonl")
@@ -35,7 +42,13 @@ func NewCreator(repoRoot string, engineType model.EngineType) *Creator {
 		engineType:  engineType,
 		engine:      eng,
 		auditLogger: audit.NewFileAppender(auditPath),
+		compression: comp,
 	}
+}
+
+// SetCompression sets the compression level for this creator.
+func (c *Creator) SetCompression(level compression.CompressionLevel) {
+	c.compression = compression.NewCompressor(level)
 }
 
 // Create performs a full snapshot of the worktree using the 12-step protocol.
@@ -126,6 +139,7 @@ func (c *Creator) CreatePartial(worktreeName, note string, tags []string, paths 
 		parentID = &pid
 	}
 
+	// Build descriptor with compression info if enabled
 	desc := &model.Descriptor{
 		SnapshotID:      snapshotID,
 		ParentID:        parentID,
@@ -137,6 +151,14 @@ func (c *Creator) CreatePartial(worktreeName, note string, tags []string, paths 
 		PayloadRootHash: payloadHash,
 		IntegrityState:  model.IntegrityVerified,
 		PartialPaths:    partialPaths,
+	}
+
+	// Add compression info if compression is enabled
+	if c.compression != nil && c.compression.IsEnabled() {
+		desc.Compression = &model.CompressionInfo{
+			Type:  string(c.compression.Type),
+			Level: int(c.compression.Level),
+		}
 	}
 
 	// Step 9: Compute descriptor checksum
@@ -165,6 +187,18 @@ func (c *Creator) CreatePartial(worktreeName, note string, tags []string, paths 
 	if err := fsutil.RenameAndSync(snapshotTmpDir, snapshotDir); err != nil {
 		cleanupTmp()
 		return nil, fmt.Errorf("atomic rename snapshot: %w", err)
+	}
+
+	// Step 11.5: Compress snapshot if enabled
+	if c.compression != nil && c.compression.IsEnabled() {
+		count, err := c.compression.CompressDir(snapshotDir)
+		if err != nil {
+			// Compression failure is non-fatal; snapshot is valid
+			fmt.Fprintf(os.Stderr, "warning: compression failed: %v\n", err)
+		} else if count > 0 {
+			// Log compression success
+			fmt.Fprintf(os.Stderr, "compressed %d files\n", count)
+		}
 	}
 
 	// Step 12: Write descriptor atomically

@@ -49,6 +49,14 @@ type Descriptor struct {
 	// PartialPaths is set for partial snapshots, listing the specific paths included.
 	// Empty or nil means a full worktree snapshot.
 	PartialPaths       []string       `json:"partial_paths,omitempty"`
+	// Compression stores compression metadata if the snapshot is compressed.
+	Compression        *CompressionInfo `json:"compression,omitempty"`
+}
+
+// CompressionInfo stores compression metadata for snapshots.
+type CompressionInfo struct {
+	Type  string `json:"type"`   // e.g., "gzip"
+	Level int    `json:"level"`  // Compression level (0-9)
 }
 
 // ReadyMarker is the .READY file content indicating complete snapshot.

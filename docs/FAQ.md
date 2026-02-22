@@ -250,6 +250,50 @@ Partial snapshots will show `"partial_paths": ["path1", "path2"]` in the output.
 
 ---
 
+### How do I use compression for snapshots?
+
+**Compression** can significantly reduce storage usage for snapshots, especially for workspaces with text files, logs, or compressible data.
+
+**Create a compressed snapshot:**
+```bash
+# Fast compression (good balance of speed and ratio)
+jvs snapshot "checkpoint" --compress fast
+
+# Maximum compression (slower but smaller files)
+jvs snapshot "archive" --compress max
+
+# Default compression level
+jvs snapshot "backup" --compress default
+```
+
+**Compression levels:**
+- `none` - No compression (default)
+- `fast` - Level 1 gzip (fastest, lower compression)
+- `default` - Level 6 gzip (balanced speed and ratio)
+- `max` - Level 9 gzip (slowest, highest compression)
+
+**Important notes:**
+- Compression happens after snapshot creation
+- Compressed files have `.gz` extension added
+- Restore automatically decompresses compressed snapshots
+- Compression metadata is stored in the snapshot descriptor
+- Compression failure is non-fatal (snapshot is still valid)
+
+**Can I tell if a snapshot is compressed?**
+Check the descriptor:
+```bash
+jvs inspect <snapshot-id>
+```
+Compressed snapshots will show `"compression": {"type": "gzip", "level": 6}` in the output.
+
+**Performance considerations:**
+- Compression adds CPU overhead during snapshot creation
+- Decompression happens during restore (also adds overhead)
+- For large datasets with incompressible data (videos, already compressed files), compression may not help
+- JuiceFS Copy-on-Write + compression provides maximum storage efficiency
+
+---
+
 ### How do I configure JVS defaults?
 
 JVS supports configuration via `.jvs/config.yaml` for repository-specific settings. This allows you to set defaults like:

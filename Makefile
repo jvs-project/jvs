@@ -1,4 +1,4 @@
-.PHONY: build test lint conformance verify security sec
+.PHONY: build test lint conformance verify security sec fuzz
 
 build:
 	go build -o bin/jvs ./cmd/jvs
@@ -23,3 +23,11 @@ sec:
 	go install honnef.co/go/tools/cmd/staticcheck@latest || true
 	staticcheck ./... || true
 	@echo "Security scan complete. See gosec-report.json for details."
+
+fuzz:
+	@echo "Running fuzzing tests (10 seconds each)..."
+	@for target in FuzzValidateName FuzzValidateTag FuzzParseSnapshotID FuzzCanonicalMarshal FuzzDescriptorJSON FuzzSnapshotIDString; do \
+		echo "Fuzzing $$target..."; \
+		go test -fuzz="$$target" -fuzztime=10s ./test/fuzz/... || exit 1; \
+	done
+	@echo "All fuzzing tests passed."

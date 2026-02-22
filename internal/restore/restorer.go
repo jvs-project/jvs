@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/jvs-project/jvs/internal/audit"
+	"github.com/jvs-project/jvs/internal/compression"
 	"github.com/jvs-project/jvs/internal/engine"
 	"github.com/jvs-project/jvs/internal/snapshot"
 	"github.com/jvs-project/jvs/internal/worktree"
@@ -57,7 +58,7 @@ func (r *Restorer) Restore(worktreeName string, snapshotID model.SnapshotID) err
 // restore performs the actual restore operation.
 func (r *Restorer) restore(worktreeName string, snapshotID model.SnapshotID) error {
 	// Load and verify snapshot
-	_, err := snapshot.LoadDescriptor(r.repoRoot, snapshotID)
+	desc, err := snapshot.LoadDescriptor(r.repoRoot, snapshotID)
 	if err != nil {
 		return fmt.Errorf("load snapshot: %w", err)
 	}
@@ -83,6 +84,18 @@ func (r *Restorer) restore(worktreeName string, snapshotID model.SnapshotID) err
 	// Step 1: Clone snapshot to temp location
 	if _, err := r.engine.Clone(snapshotDir, tempPath); err != nil {
 		return fmt.Errorf("clone to temp: %w", err)
+	}
+
+	// Step 1.5: Decompress if snapshot was compressed
+	if desc.Compression != nil {
+		count, err := compression.DecompressDir(tempPath)
+		if err != nil {
+			os.RemoveAll(tempPath)
+			return fmt.Errorf("decompress snapshot: %w", err)
+		}
+		if count > 0 {
+			fmt.Fprintf(os.Stderr, "decompressed %d files\n", count)
+		}
 	}
 
 	// Step 2: Atomic swap: rename current to backup, temp to payload
