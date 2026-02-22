@@ -6,10 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
-	"time"
 
 	"github.com/jvs-project/jvs/pkg/model"
-	"github.com/jvs-project/jvs/pkg/webhook"
 	"gopkg.in/yaml.v3"
 )
 
@@ -32,82 +30,6 @@ type Config struct {
 
 	// ProgressEnabled enables progress bars by default.
 	ProgressEnabled *bool `yaml:"progress_enabled,omitempty"`
-
-	// SnapshotTemplates defines pre-configured snapshot patterns.
-	SnapshotTemplates map[string]SnapshotTemplate `yaml:"snapshot_templates,omitempty"`
-
-	// Webhooks defines webhook notification configuration.
-	Webhooks *WebhookConfig `yaml:"webhooks,omitempty"`
-
-	// Legacy fields for backward compatibility
-	Engine          string                `yaml:"engine,omitempty"`
-	RetentionPolicy RetentionPolicyConfig `yaml:"retention_policy,omitempty"`
-	Logging         LoggingConfig         `yaml:"logging,omitempty"`
-}
-
-// SnapshotTemplate defines a pre-configured snapshot pattern.
-type SnapshotTemplate struct {
-	// Note is the note template for the snapshot.
-	// Supports placeholders: {date}, {time}, {datetime}, {user}, {hostname}
-	Note string `yaml:"note,omitempty"`
-
-	// Tags are tags to automatically apply.
-	Tags []string `yaml:"tags,omitempty"`
-
-	// Compression is the compression level to use.
-	Compression string `yaml:"compression,omitempty"` // none, fast, default, max
-
-	// Paths are paths to include for partial snapshots (empty = full snapshot).
-	Paths []string `yaml:"paths,omitempty"`
-}
-
-// RetentionPolicyConfig configures GC retention.
-type RetentionPolicyConfig struct {
-	KeepMinSnapshots int    `yaml:"keep_min_snapshots,omitempty"`
-	KeepMinAge       string `yaml:"keep_min_age,omitempty"`
-}
-
-// LoggingConfig configures logging behavior.
-type LoggingConfig struct {
-	Level  string `yaml:"level,omitempty"`
-	Format string `yaml:"format,omitempty"` // json, text
-}
-
-// WebhookConfig represents webhook configuration for event notifications.
-type WebhookConfig struct {
-	// Enabled enables or disables webhook notifications.
-	Enabled bool `yaml:"enabled,omitempty"`
-
-	// MaxRetries is the number of retries for failed webhook deliveries.
-	MaxRetries int `yaml:"max_retries,omitempty"`
-
-	// RetryDelay is the delay between retries.
-	RetryDelay string `yaml:"retry_delay,omitempty"` // e.g., "5s", "1m"
-
-	// AsyncQueueSize is the size of the async webhook queue.
-	AsyncQueueSize int `yaml:"async_queue_size,omitempty"`
-
-	// Hooks is the list of webhook endpoints.
-	Hooks []WebhookHook `yaml:"hooks,omitempty"`
-}
-
-// WebhookHook represents a single webhook endpoint.
-type WebhookHook struct {
-	// URL is the webhook endpoint URL.
-	URL string `yaml:"url"`
-
-	// Secret is the HMAC secret for signature verification (optional).
-	Secret string `yaml:"secret,omitempty"`
-
-	// Events is the list of events to send to this webhook.
-	// Use "*" to receive all events.
-	Events []string `yaml:"events,omitempty"`
-
-	// Timeout is the HTTP request timeout (optional).
-	Timeout string `yaml:"timeout,omitempty"` // e.g., "10s"
-
-	// Enabled enables or disables this specific hook.
-	Enabled bool `yaml:"enabled,omitempty"`
 }
 
 // Default returns the default configuration.
@@ -117,16 +39,6 @@ func Default() *Config {
 		DefaultTags:     nil,
 		OutputFormat:    "",
 		ProgressEnabled: nil,
-		// Legacy defaults
-		Engine: "auto",
-		RetentionPolicy: RetentionPolicyConfig{
-			KeepMinSnapshots: 10,
-			KeepMinAge:       "24h",
-		},
-		Logging: LoggingConfig{
-			Level:  "info",
-			Format: "text",
-		},
 	}
 }
 
@@ -209,13 +121,6 @@ func (c *Config) validate() error {
 	// Validate output_format if set
 	if c.OutputFormat != "" && c.OutputFormat != "text" && c.OutputFormat != "json" {
 		return fmt.Errorf("invalid output_format: %s (must be text or json)", c.OutputFormat)
-	}
-
-	// Validate webhooks if configured
-	if c.Webhooks != nil {
-		if err := c.Webhooks.Validate(); err != nil {
-			return fmt.Errorf("webhooks: %w", err)
-		}
 	}
 
 	return nil
@@ -331,169 +236,3 @@ func cacheAndReturn(repoRoot string, cfg *Config) {
 	cache[repoRoot] = cfg
 	cacheMu.Unlock()
 }
-
-// GetSnapshotTemplate returns a snapshot template by name.
-// Returns nil if the template doesn't exist.
-func (c *Config) GetSnapshotTemplate(name string) *SnapshotTemplate {
-	if c.SnapshotTemplates == nil {
-		return nil
-	}
-	if tmpl, ok := c.SnapshotTemplates[name]; ok {
-		return &tmpl
-	}
-	return nil
-}
-
-// GetBuiltinTemplates returns the built-in snapshot templates.
-func GetBuiltinTemplates() map[string]SnapshotTemplate {
-	return map[string]SnapshotTemplate{
-		"pre-experiment": {
-			Note: "Before experiment: {datetime}",
-			Tags: []string{"experiment", "checkpoint"},
-		},
-		"pre-deploy": {
-			Note: "Pre-deployment checkpoint: {datetime}",
-			Tags: []string{"pre-deploy", "release"},
-		},
-		"checkpoint": {
-			Note: "Checkpoint: {datetime}",
-			Tags: []string{"checkpoint"},
-		},
-		"work": {
-			Note: "Work in progress: {datetime}",
-			Tags: []string{"wip"},
-		},
-		"release": {
-			Note: "Release: {datetime}",
-			Tags: []string{"release", "stable"},
-		},
-		"archive": {
-			Note: "Archive: {datetime}",
-			Tags: []string{"archive"},
-			Compression: "max",
-		},
-	}
-}
-
-// ResolveTemplate resolves a template name to an actual SnapshotTemplate.
-// Checks user-defined templates first, then built-in templates.
-func ResolveTemplate(repoRoot string, name string) *SnapshotTemplate {
-	cfg, _ := Load(repoRoot)
-
-	// Check user-defined templates first
-	if tmpl := cfg.GetSnapshotTemplate(name); tmpl != nil {
-		return tmpl
-	}
-
-	// Check built-in templates
-	builtin := GetBuiltinTemplates()
-	if tmpl, ok := builtin[name]; ok {
-		return &tmpl
-	}
-
-	return nil
-}
-
-// ListTemplates returns all available template names (user + built-in).
-func ListTemplates(repoRoot string) []string {
-	cfg, _ := Load(repoRoot)
-	names := make(map[string]bool)
-
-	// Add user-defined templates
-	if cfg.SnapshotTemplates != nil {
-		for name := range cfg.SnapshotTemplates {
-			names[name] = true
-		}
-	}
-
-	// Add built-in templates
-	for name := range GetBuiltinTemplates() {
-		names[name] = true
-	}
-
-	// Convert to sorted slice
-	result := make([]string, 0, len(names))
-	for name := range names {
-		result = append(result, name)
-	}
-	return result
-}
-
-// Validate checks if the webhook configuration is valid.
-func (w *WebhookConfig) Validate() error {
-	for i, hook := range w.Hooks {
-		if hook.URL == "" {
-			return fmt.Errorf("hook[%d]: url is required", i)
-		}
-		if len(hook.Events) == 0 {
-			return fmt.Errorf("hook[%d]: at least one event must be specified", i)
-		}
-	}
-	return nil
-}
-
-// ToWebhookConfig converts WebhookConfig to webhook.Config for use by the webhook package.
-func (w *WebhookConfig) ToWebhookConfig() *webhook.Config {
-	if w == nil {
-		return nil
-	}
-
-	cfg := &webhook.Config{
-		Enabled: w.Enabled,
-		Hooks:   make([]webhook.HookConfig, 0, len(w.Hooks)),
-	}
-
-	// Apply defaults
-	if cfg.MaxRetries == 0 {
-		cfg.MaxRetries = 3
-	}
-	if w.MaxRetries > 0 {
-		cfg.MaxRetries = w.MaxRetries
-	}
-	if w.RetryDelay != "" {
-		if d, err := parseDuration(w.RetryDelay); err == nil {
-			cfg.RetryDelay = d
-		}
-	}
-	if cfg.RetryDelay == 0 {
-		cfg.RetryDelay = 5 * 1000000000 // 5 seconds in nanoseconds
-	}
-	if w.AsyncQueueSize > 0 {
-		cfg.AsyncQueueSize = w.AsyncQueueSize
-	}
-	if cfg.AsyncQueueSize == 0 {
-		cfg.AsyncQueueSize = 100
-	}
-
-	// Convert hooks
-	for _, h := range w.Hooks {
-		hookCfg := webhook.HookConfig{
-			URL:     h.URL,
-			Secret:  h.Secret,
-			Events:  make([]webhook.EventType, 0, len(h.Events)),
-			Enabled: h.Enabled,
-		}
-
-		// Convert event strings to EventType
-		for _, e := range h.Events {
-			hookCfg.Events = append(hookCfg.Events, webhook.EventType(e))
-		}
-
-		// Parse timeout if specified
-		if h.Timeout != "" {
-			if d, err := parseDuration(h.Timeout); err == nil {
-				hookCfg.Timeout = d
-			}
-		}
-
-		cfg.Hooks = append(cfg.Hooks, hookCfg)
-	}
-
-	return cfg
-}
-
-// parseDuration parses a duration string like "5s", "1m", "1h".
-func parseDuration(s string) (time.Duration, error) {
-	return time.ParseDuration(s)
-}
-
