@@ -415,3 +415,427 @@ func BenchmarkFindByTag(b *testing.B) {
 		}
 	}
 }
+
+// ============================================================================
+// Engine Performance Comparison Benchmarks
+// These benchmarks compare the three snapshot engines across different scenarios.
+// ============================================================================
+
+// BenchmarkEngineComparison_1KB compares all engines with 1KB payload.
+func BenchmarkEngineComparison_1KB(b *testing.B) {
+	benchmarks := []struct {
+		name  string
+		engine model.EngineType
+	}{
+		{"Copy", model.EngineCopy},
+		{"Reflink", model.EngineReflinkCopy},
+		{"JuiceFS", model.EngineJuiceFSClone},
+	}
+
+	for _, bm := range benchmarks {
+		b.Run(bm.name, func(b *testing.B) {
+			repoPath := setupBenchRepo(b, 1024) // 1KB
+			creator := snapshot.NewCreator(repoPath, bm.engine)
+
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				_, err := creator.Create("main", "bench snapshot", nil)
+				if err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
+	}
+}
+
+// BenchmarkEngineComparison_100KB compares all engines with 100KB payload.
+func BenchmarkEngineComparison_100KB(b *testing.B) {
+	benchmarks := []struct {
+		name  string
+		engine model.EngineType
+	}{
+		{"Copy", model.EngineCopy},
+		{"Reflink", model.EngineReflinkCopy},
+		{"JuiceFS", model.EngineJuiceFSClone},
+	}
+
+	for _, bm := range benchmarks {
+		b.Run(bm.name, func(b *testing.B) {
+			repoPath := setupBenchRepo(b, 100*1024) // 100KB
+			creator := snapshot.NewCreator(repoPath, bm.engine)
+
+			b.ResetTimer()
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				_, err := creator.Create("main", "bench snapshot", nil)
+				if err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
+	}
+}
+
+// BenchmarkEngineComparison_1MB compares all engines with 1MB payload.
+func BenchmarkEngineComparison_1MB(b *testing.B) {
+	benchmarks := []struct {
+		name  string
+		engine model.EngineType
+	}{
+		{"Copy", model.EngineCopy},
+		{"Reflink", model.EngineReflinkCopy},
+		{"JuiceFS", model.EngineJuiceFSClone},
+	}
+
+	for _, bm := range benchmarks {
+		b.Run(bm.name, func(b *testing.B) {
+			repoPath := setupBenchRepo(b, 1024*1024) // 1MB
+			creator := snapshot.NewCreator(repoPath, bm.engine)
+
+			b.ResetTimer()
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				_, err := creator.Create("main", "bench snapshot", nil)
+				if err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
+	}
+}
+
+// BenchmarkEngineComparison_10MB compares all engines with 10MB payload.
+func BenchmarkEngineComparison_10MB(b *testing.B) {
+	benchmarks := []struct {
+		name  string
+		engine model.EngineType
+	}{
+		{"Copy", model.EngineCopy},
+		{"Reflink", model.EngineReflinkCopy},
+		{"JuiceFS", model.EngineJuiceFSClone},
+	}
+
+	for _, bm := range benchmarks {
+		b.Run(bm.name, func(b *testing.B) {
+			repoPath := setupBenchRepo(b, 10*1024*1024) // 10MB
+			creator := snapshot.NewCreator(repoPath, bm.engine)
+
+			b.ResetTimer()
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				_, err := creator.Create("main", "bench snapshot", nil)
+				if err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
+	}
+}
+
+// BenchmarkEngineComparison_10Files compares all engines with 10 small files.
+func BenchmarkEngineComparison_10Files(b *testing.B) {
+	benchmarks := []struct {
+		name  string
+		engine model.EngineType
+	}{
+		{"Copy", model.EngineCopy},
+		{"Reflink", model.EngineReflinkCopy},
+		{"JuiceFS", model.EngineJuiceFSClone},
+	}
+
+	for _, bm := range benchmarks {
+		b.Run(bm.name, func(b *testing.B) {
+			repoPath := setupBenchRepoWithFiles(b, 10)
+			creator := snapshot.NewCreator(repoPath, bm.engine)
+
+			b.ResetTimer()
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				_, err := creator.Create("main", "bench snapshot", nil)
+				if err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
+	}
+}
+
+// BenchmarkEngineComparison_100Files compares all engines with 100 small files.
+func BenchmarkEngineComparison_100Files(b *testing.B) {
+	benchmarks := []struct {
+		name  string
+		engine model.EngineType
+	}{
+		{"Copy", model.EngineCopy},
+		{"Reflink", model.EngineReflinkCopy},
+		{"JuiceFS", model.EngineJuiceFSClone},
+	}
+
+	for _, bm := range benchmarks {
+		b.Run(bm.name, func(b *testing.B) {
+			repoPath := setupBenchRepoWithFiles(b, 100)
+			creator := snapshot.NewCreator(repoPath, bm.engine)
+
+			b.ResetTimer()
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				_, err := creator.Create("main", "bench snapshot", nil)
+				if err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
+	}
+}
+
+// BenchmarkEngineComparison_1000Files compares all engines with 1000 small files.
+func BenchmarkEngineComparison_1000Files(b *testing.B) {
+	benchmarks := []struct {
+		name  string
+		engine model.EngineType
+	}{
+		{"Copy", model.EngineCopy},
+		{"Reflink", model.EngineReflinkCopy},
+		{"JuiceFS", model.EngineJuiceFSClone},
+	}
+
+	for _, bm := range benchmarks {
+		b.Run(bm.name, func(b *testing.B) {
+			repoPath := setupBenchRepoWithFiles(b, 1000)
+			creator := snapshot.NewCreator(repoPath, bm.engine)
+
+			b.ResetTimer()
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				_, err := creator.Create("main", "bench snapshot", nil)
+				if err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
+	}
+}
+
+// BenchmarkEngineComparison_Mixed compares all engines with mixed file sizes.
+func BenchmarkEngineComparison_Mixed(b *testing.B) {
+	benchmarks := []struct {
+		name  string
+		engine model.EngineType
+	}{
+		{"Copy", model.EngineCopy},
+		{"Reflink", model.EngineReflinkCopy},
+		{"JuiceFS", model.EngineJuiceFSClone},
+	}
+
+	for _, bm := range benchmarks {
+		b.Run(bm.name, func(b *testing.B) {
+			repoPath := b.TempDir()
+			_, err := repo.Init(repoPath, "bench")
+			if err != nil {
+				b.Fatal(err)
+			}
+
+			mainPath := filepath.Join(repoPath, "main")
+
+			// Create mixed file sizes: 1KB, 10KB, 100KB, 1MB
+			sizes := []int{1024, 10 * 1024, 100 * 1024, 1024 * 1024}
+			for i, size := range sizes {
+				data := make([]byte, size)
+				for j := range data {
+					data[j] = byte((i + j) % 256)
+				}
+				fileName := filepath.Join(mainPath, "file"+strconv.Itoa(i)+".bin")
+				if err := os.WriteFile(fileName, data, 0644); err != nil {
+					b.Fatal(err)
+				}
+			}
+
+			creator := snapshot.NewCreator(repoPath, bm.engine)
+
+			b.ResetTimer()
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				_, err := creator.Create("main", "bench snapshot", nil)
+				if err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
+	}
+}
+
+// BenchmarkEngine_LineageCreation benchmarks creating a chain of snapshots (lineage).
+func BenchmarkEngine_LineageCreation(b *testing.B) {
+	benchmarks := []struct {
+		name  string
+		engine model.EngineType
+	}{
+		{"Copy", model.EngineCopy},
+		{"Reflink", model.EngineReflinkCopy},
+		{"JuiceFS", model.EngineJuiceFSClone},
+	}
+
+	chainLength := 10
+
+	for _, bm := range benchmarks {
+		b.Run(bm.name, func(b *testing.B) {
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				b.StopTimer()
+				repoPath := setupBenchRepo(b, 100*1024) // 100KB
+				creator := snapshot.NewCreator(repoPath, bm.engine)
+
+				// Create a chain of snapshots
+				for j := 0; j < chainLength; j++ {
+					b.StartTimer()
+					_, err := creator.Create("main", "chain snapshot", nil)
+					b.StopTimer()
+					if err != nil {
+						b.Fatal(err)
+					}
+				}
+			}
+		})
+	}
+}
+
+// BenchmarkEngine_PartialSnapshot benchmarks partial snapshot creation.
+func BenchmarkEngine_PartialSnapshot(b *testing.B) {
+	benchmarks := []struct {
+		name  string
+		engine model.EngineType
+	}{
+		{"Copy", model.EngineCopy},
+		{"Reflink", model.EngineReflinkCopy},
+		{"JuiceFS", model.EngineJuiceFSClone},
+	}
+
+	for _, bm := range benchmarks {
+		b.Run(bm.name, func(b *testing.B) {
+			repoPath := b.TempDir()
+			_, err := repo.Init(repoPath, "bench")
+			if err != nil {
+				b.Fatal(err)
+			}
+
+			mainPath := filepath.Join(repoPath, "main")
+
+			// Create 100 files in subdirectories
+			for i := 0; i < 100; i++ {
+				subDir := filepath.Join(mainPath, "data", strconv.Itoa(i%10))
+				if err := os.MkdirAll(subDir, 0755); err != nil {
+					b.Fatal(err)
+				}
+				data := []byte("test content for file " + strconv.Itoa(i))
+				filePath := filepath.Join(subDir, "file"+strconv.Itoa(i)+".txt")
+				if err := os.WriteFile(filePath, data, 0644); err != nil {
+					b.Fatal(err)
+				}
+			}
+
+			creator := snapshot.NewCreator(repoPath, bm.engine)
+
+			// Snapshot only the "data/0" subdirectory
+			partialPaths := []string{"data/0"}
+
+			b.ResetTimer()
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				_, err := creator.CreatePartial("main", "partial snapshot", nil, partialPaths)
+				if err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
+	}
+}
+
+// BenchmarkEngine_SnapshotWithCompression benchmarks snapshot creation with compression.
+func BenchmarkEngine_SnapshotWithCompression(b *testing.B) {
+	benchmarks := []struct {
+		name  string
+		engine model.EngineType
+	}{
+		{"Copy", model.EngineCopy},
+		{"Reflink", model.EngineReflinkCopy},
+	}
+
+	for _, bm := range benchmarks {
+		b.Run(bm.name, func(b *testing.B) {
+			repoPath := setupBenchRepo(b, 1024*1024) // 1MB of compressible data
+
+			// Use compressible data
+			mainPath := filepath.Join(repoPath, "main")
+			compressibleData := make([]byte, 1024*1024)
+			for i := range compressibleData {
+				compressibleData[i] = byte(i % 64) // Highly repetitive
+			}
+			if err := os.WriteFile(filepath.Join(mainPath, "compressible.bin"), compressibleData, 0644); err != nil {
+				b.Fatal(err)
+			}
+
+			creator := snapshot.NewCreatorWithCompression(repoPath, bm.engine, nil)
+
+			b.ResetTimer()
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				_, err := creator.Create("main", "compressed snapshot", nil)
+				if err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
+	}
+}
+
+// BenchmarkEngine_DeepDirectoryTree benchmarks engines with deeply nested directories.
+func BenchmarkEngine_DeepDirectoryTree(b *testing.B) {
+	benchmarks := []struct {
+		name  string
+		engine model.EngineType
+	}{
+		{"Copy", model.EngineCopy},
+		{"Reflink", model.EngineReflinkCopy},
+		{"JuiceFS", model.EngineJuiceFSClone},
+	}
+
+	for _, bm := range benchmarks {
+		b.Run(bm.name, func(b *testing.B) {
+			repoPath := b.TempDir()
+			_, err := repo.Init(repoPath, "bench")
+			if err != nil {
+				b.Fatal(err)
+			}
+
+			mainPath := filepath.Join(repoPath, "main")
+
+			// Create a deep directory tree (10 levels deep, 10 files per level)
+			for level := 0; level < 10; level++ {
+				levelPath := mainPath
+				for i := 0; i <= level; i++ {
+					levelPath = filepath.Join(levelPath, "level"+strconv.Itoa(i))
+				}
+				if err := os.MkdirAll(levelPath, 0755); err != nil {
+					b.Fatal(err)
+				}
+				// Add a file at each level
+				data := []byte("content at level " + strconv.Itoa(level))
+				filePath := filepath.Join(levelPath, "file.txt")
+				if err := os.WriteFile(filePath, data, 0644); err != nil {
+					b.Fatal(err)
+				}
+			}
+
+			creator := snapshot.NewCreator(repoPath, bm.engine)
+
+			b.ResetTimer()
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				_, err := creator.Create("main", "deep tree snapshot", nil)
+				if err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
+	}
+}
