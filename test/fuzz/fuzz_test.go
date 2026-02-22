@@ -122,22 +122,19 @@ func FuzzParseSnapshotID(f *testing.F) {
 // This ensures the JSON canonicalization doesn't panic and produces
 // consistent output for the same input.
 func FuzzCanonicalMarshal(f *testing.F) {
-	// Seed corpus with various Go types
-	f.Add(int(42))
-	f.Add(int64(12345678901234))
-	f.Add("test string")
-	f.Add(true)
-	f.Add(false)
-	f.Add(nil)
-	f.Add([]int{1, 2, 3})
-	f.Add(map[string]any{"a": 1, "b": 2})
-	f.Add([]any{1, "two", map[string]int{"c": 3}})
-
-	// Add JSON-like structures
+	// Seed corpus with JSON byte arrays
 	f.Add([]byte(`{"name":"test","value":123}`))
 	f.Add([]byte(`{"nested":{"key":"value"}}`))
 	f.Add([]byte(`[1,2,3]`))
 	f.Add([]byte(`null`))
+	f.Add([]byte(`"simple string"`))
+	f.Add([]byte(`123`))
+	f.Add([]byte(`true`))
+	f.Add([]byte(`false`))
+	f.Add([]byte(`{}`))
+	f.Add([]byte(`[]`))
+	f.Add([]byte(`{"a":1,"b":2,"c":3}`))
+	f.Add([]byte(`{"z":9,"a":1,"m":5}`))  // test key ordering
 
 	f.Fuzz(func(t *testing.T, data []byte) {
 		// First, try to interpret data as JSON
