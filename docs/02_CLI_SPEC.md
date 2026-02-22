@@ -103,11 +103,12 @@ Required JSON fields:
 - `total_added`, `total_removed`, `total_modified`
 
 ## Restore commands
-### `jvs restore <snapshot-id> [--json]`
+### `jvs restore <snapshot-id> [-i | --interactive] [--json]`
 Inplace restore: restore current worktree to the specified snapshot.
 - `<snapshot-id>` can be a full ID, short ID prefix, tag name, or note prefix (fuzzy match)
 - After restore, worktree enters **detached state** (unless restoring to HEAD)
 - In detached state, cannot create new snapshots
+- `--interactive` (`-i`): Shows fuzzy-matched snapshots with confirmation prompt
 
 ### `jvs restore HEAD [--json]`
 Return to latest state: restore worktree to its latest snapshot.

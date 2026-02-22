@@ -18,8 +18,9 @@ import (
 
 // Collector handles garbage collection.
 type Collector struct {
-	repoRoot    string
-	auditLogger *audit.FileAppender
+	repoRoot       string
+	auditLogger    *audit.FileAppender
+	progressCallback func(string, int, int, string)
 }
 
 // NewCollector creates a new GC collector.
@@ -29,6 +30,11 @@ func NewCollector(repoRoot string) *Collector {
 		repoRoot:    repoRoot,
 		auditLogger: audit.NewFileAppender(auditPath),
 	}
+}
+
+// SetProgressCallback sets a callback for progress updates.
+func (c *Collector) SetProgressCallback(cb func(string, int, int, string)) {
+	c.progressCallback = cb
 }
 
 // Plan creates a GC plan.
@@ -109,15 +115,27 @@ func (c *Collector) Run(planID string) error {
 		}
 	}
 
+	totalToDelete := len(plan.ToDelete)
+
 	// Delete snapshots
 	var deleted []model.SnapshotID
-	for _, snapshotID := range plan.ToDelete {
+	for i, snapshotID := range plan.ToDelete {
+		// Report progress
+		if c.progressCallback != nil {
+			c.progressCallback("gc", i+1, totalToDelete, fmt.Sprintf("deleting %s", snapshotID.ShortID()))
+		}
+
 		if err := c.deleteSnapshot(snapshotID); err != nil {
 			// Log error but continue
 			fmt.Fprintf(os.Stderr, "warning: failed to delete %s: %v\n", snapshotID, err)
 			continue
 		}
 		deleted = append(deleted, snapshotID)
+	}
+
+	// Report completion
+	if c.progressCallback != nil && totalToDelete > 0 {
+		c.progressCallback("gc", totalToDelete, totalToDelete, fmt.Sprintf("deleted %d snapshots", len(deleted)))
 	}
 
 	// Write tombstones

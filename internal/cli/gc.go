@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/jvs-project/jvs/internal/gc"
+	"github.com/jvs-project/jvs/pkg/progress"
 )
 
 var (
@@ -58,6 +59,24 @@ var gcRunCmd = &cobra.Command{
 		}
 
 		collector := gc.NewCollector(r.Root)
+
+		// Add progress callback if enabled
+		if progressEnabled() {
+			// First get the plan to know total
+			plan, err := collector.LoadPlan(gcPlanID)
+			if err != nil {
+				fmtErr("load plan: %v", err)
+				os.Exit(1)
+			}
+
+			total := len(plan.ToDelete)
+			if total > 0 {
+				term := progress.NewTerminal("GC", total, true)
+				cb := term.Callback()
+				collector.SetProgressCallback(cb)
+			}
+		}
+
 		if err := collector.Run(gcPlanID); err != nil {
 			fmtErr("run gc: %v", err)
 			os.Exit(1)
