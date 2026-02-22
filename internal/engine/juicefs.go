@@ -1,8 +1,11 @@
 package engine
 
 import (
+	"bufio"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"strings"
 
 	"github.com/jvs-project/jvs/pkg/model"
 )
@@ -75,33 +78,45 @@ func (e *JuiceFSEngine) isJuiceFSAvailable() bool {
 }
 
 func (e *JuiceFSEngine) isOnJuiceFS(path string) bool {
-	// Check if path is on JuiceFS by looking at mount info
-	// This is a simplified check - in production would check /proc/mounts
-	var s syscallStat_t
-	if err := doStat(path, &s); err != nil {
+	// Resolve to absolute path
+	absPath, err := filepath.Abs(path)
+	if err != nil {
 		return false
 	}
-	// JuiceFS typically has specific filesystem type
-	// For now, return true if juicefs command exists
-	return e.isJuiceFSAvailable()
-}
 
-// Minimal syscall stat for filesystem detection
-type syscallStat_t struct {
-	Dev  uint64
-	Ino  uint64
-	Mode uint32
-	// ... other fields omitted
-}
-
-func doStat(path string, s *syscallStat_t) error {
-	// Simplified - would use syscall.Stat in production
-	info, err := os.Stat(path)
+	// Read /proc/mounts to find JuiceFS mount points
+	file, err := os.Open("/proc/mounts")
 	if err != nil {
-		return err
+		// Fallback for non-Linux systems: check if juicefs command exists
+		// This is a conservative fallback - it won't correctly detect JuiceFS
+		// on macOS or other systems without /proc/mounts
+		return e.isJuiceFSAvailable()
 	}
-	s.Dev = uint64(info.ModTime().UnixNano()) // placeholder
-	return nil
+	defer file.Close()
+
+	// Find the longest matching JuiceFS mount point
+	var bestMount string
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := scanner.Text()
+		fields := strings.Fields(line)
+		if len(fields) < 3 {
+			continue
+		}
+		// fields[0] = device, fields[1] = mount point, fields[2] = fs type
+		fsType := fields[2]
+		mountPoint := fields[1]
+
+		// Check if it's a JuiceFS mount (fs type contains "juicefs")
+		if strings.Contains(strings.ToLower(fsType), "juicefs") {
+			// Check if our path is under this mount point
+			if strings.HasPrefix(absPath, mountPoint) && len(mountPoint) > len(bestMount) {
+				bestMount = mountPoint
+			}
+		}
+	}
+
+	return bestMount != ""
 }
 
 // Engine detection function

@@ -17,6 +17,7 @@ type GCPlan struct {
 	ProtectedSet           []SnapshotID    `json:"protected_set"`
 	ProtectedByPin         int             `json:"protected_by_pin"`
 	ProtectedByLineage     int             `json:"protected_by_lineage"`
+	CandidateCount         int             `json:"candidate_count"`
 	ToDelete               []SnapshotID    `json:"to_delete"`
 	DeletableBytesEstimate int64           `json:"deletable_bytes_estimate"`
 	EstimatedBytes         int64           `json:"estimated_bytes"` // Legacy, same as deletable_bytes_estimate

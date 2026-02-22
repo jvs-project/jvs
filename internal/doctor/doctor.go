@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/jvs-project/jvs/internal/repo"
 	"github.com/jvs-project/jvs/internal/verify"
@@ -28,6 +29,21 @@ type Result struct {
 	Findings []Finding `json:"findings"`
 }
 
+// RepairAction describes a repair operation.
+type RepairAction struct {
+	ID          string `json:"id"`
+	Description string `json:"description"`
+	AutoSafe    bool   `json:"auto_safe"`
+}
+
+// RepairResult contains the result of a repair operation.
+type RepairResult struct {
+	Action   string `json:"action"`
+	Success  bool   `json:"success"`
+	Message  string `json:"message"`
+	Cleaned  int    `json:"cleaned,omitempty"`
+}
+
 // Doctor performs repository health checks.
 type Doctor struct {
 	repoRoot string
@@ -36,6 +52,120 @@ type Doctor struct {
 // NewDoctor creates a new doctor.
 func NewDoctor(repoRoot string) *Doctor {
 	return &Doctor{repoRoot: repoRoot}
+}
+
+// ListRepairActions returns all available repair actions.
+func (d *Doctor) ListRepairActions() []RepairAction {
+	return []RepairAction{
+		{ID: "clean_tmp", Description: "Remove orphan .tmp files and directories", AutoSafe: true},
+		{ID: "clean_intents", Description: "Remove completed/abandoned intent files", AutoSafe: true},
+		{ID: "rebuild_index", Description: "Rebuild index from snapshot state", AutoSafe: false},
+		{ID: "audit_repair", Description: "Recompute audit hash chain", AutoSafe: false},
+		{ID: "advance_head", Description: "Advance stale head to latest READY", AutoSafe: false},
+	}
+}
+
+// Repair executes the specified repair actions.
+func (d *Doctor) Repair(actions []string) ([]RepairResult, error) {
+	results := []RepairResult{}
+	for _, action := range actions {
+		switch action {
+		case "clean_tmp":
+			results = append(results, d.repairCleanTmp())
+		case "clean_intents":
+			results = append(results, d.repairCleanIntents())
+		case "advance_head":
+			results = append(results, d.repairAdvanceHead())
+		default:
+			results = append(results, RepairResult{
+				Action:  action,
+				Success: false,
+				Message: "unknown repair action",
+			})
+		}
+	}
+	return results, nil
+}
+
+func (d *Doctor) repairCleanTmp() RepairResult {
+	cleaned := 0
+
+	// Clean orphan .jvs-tmp-* files
+	filepath.Walk(d.repoRoot, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil
+		}
+		name := info.Name()
+		if len(name) > 9 && name[:9] == ".jvs-tmp-" {
+			if err := os.RemoveAll(path); err == nil {
+				cleaned++
+			}
+		}
+		return nil
+	})
+
+	// Clean orphan snapshot .tmp directories
+	snapshotsDir := filepath.Join(d.repoRoot, ".jvs", "snapshots")
+	entries, err := os.ReadDir(snapshotsDir)
+	if err == nil {
+		for _, entry := range entries {
+			if entry.IsDir() && strings.HasSuffix(entry.Name(), ".tmp") {
+				tmpPath := filepath.Join(snapshotsDir, entry.Name())
+				if err := os.RemoveAll(tmpPath); err == nil {
+					cleaned++
+				}
+			}
+		}
+	}
+
+	return RepairResult{
+		Action:  "clean_tmp",
+		Success: true,
+		Message: fmt.Sprintf("cleaned %d tmp files/directories", cleaned),
+		Cleaned: cleaned,
+	}
+}
+
+func (d *Doctor) repairCleanIntents() RepairResult {
+	intentsDir := filepath.Join(d.repoRoot, ".jvs", "intents")
+	cleaned := 0
+
+	entries, err := os.ReadDir(intentsDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return RepairResult{Action: "clean_intents", Success: true, Message: "no intents directory"}
+		}
+		return RepairResult{Action: "clean_intents", Success: false, Message: err.Error()}
+	}
+
+	for _, entry := range entries {
+		intentPath := filepath.Join(intentsDir, entry.Name())
+		// Remove all intent files - they should be cleaned up by normal operations
+		// Any remaining are considered orphaned
+		if err := os.Remove(intentPath); err == nil {
+			cleaned++
+		}
+	}
+
+	return RepairResult{
+		Action:  "clean_intents",
+		Success: true,
+		Message: fmt.Sprintf("cleaned %d orphan intent files", cleaned),
+		Cleaned: cleaned,
+	}
+}
+
+func (d *Doctor) repairAdvanceHead() RepairResult {
+	// This is a more complex repair that would:
+	// 1. Find worktrees with stale head_snapshot_id
+	// 2. Check if there's a READY snapshot with no descriptor pointing to it
+	// 3. Advance the head
+	// For now, return not implemented
+	return RepairResult{
+		Action:  "advance_head",
+		Success: false,
+		Message: "not implemented - requires manual intervention",
+	}
 }
 
 // Check runs all diagnostic checks.

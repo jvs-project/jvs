@@ -66,6 +66,7 @@ func (c *Collector) Plan() (*model.GCPlan, error) {
 		ProtectedSet:           protectedSet,
 		ProtectedByPin:         0, // TODO: implement pin support
 		ProtectedByLineage:     protectedByLineage,
+		CandidateCount:         len(toDelete),
 		ToDelete:               toDelete,
 		DeletableBytesEstimate: deletableBytes,
 		EstimatedBytes:         deletableBytes, // Legacy field
