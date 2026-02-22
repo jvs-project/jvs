@@ -10,9 +10,9 @@ import (
 )
 
 var (
-	doctorStrict      bool
-	doctorRepair      bool
-	doctorRepairList  bool
+	doctorStrict     bool
+	doctorRepair     bool
+	doctorRepairList bool
 )
 
 var doctorCmd = &cobra.Command{

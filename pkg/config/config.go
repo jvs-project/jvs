@@ -11,9 +11,9 @@ import (
 
 // Config represents the JVS configuration.
 type Config struct {
-	Engine         string            `yaml:"engine"`
+	Engine          string                `yaml:"engine"`
 	RetentionPolicy RetentionPolicyConfig `yaml:"retention_policy"`
-	Logging        LoggingConfig     `yaml:"logging"`
+	Logging         LoggingConfig         `yaml:"logging"`
 }
 
 // RetentionPolicyConfig configures GC retention.

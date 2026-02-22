@@ -63,3 +63,46 @@ func TestFsyncDir(t *testing.T) {
 	err := fsutil.FsyncDir(dir)
 	assert.NoError(t, err)
 }
+
+func TestFsyncDir_NonExistent(t *testing.T) {
+	err := fsutil.FsyncDir("/nonexistent/path/to/dir")
+	assert.Error(t, err)
+}
+
+func TestFsyncTree(t *testing.T) {
+	dir := t.TempDir()
+
+	// Create nested structure with files
+	subDir := filepath.Join(dir, "subdir")
+	require.NoError(t, os.Mkdir(subDir, 0755))
+
+	file1 := filepath.Join(dir, "file1.txt")
+	file2 := filepath.Join(subDir, "file2.txt")
+	require.NoError(t, os.WriteFile(file1, []byte("data1"), 0644))
+	require.NoError(t, os.WriteFile(file2, []byte("data2"), 0644))
+
+	err := fsutil.FsyncTree(dir)
+	assert.NoError(t, err)
+}
+
+func TestFsyncTree_NonExistent(t *testing.T) {
+	err := fsutil.FsyncTree("/nonexistent/path")
+	assert.Error(t, err)
+}
+
+func TestFsyncTree_EmptyDir(t *testing.T) {
+	dir := t.TempDir()
+	err := fsutil.FsyncTree(dir)
+	assert.NoError(t, err)
+}
+
+func TestAtomicWrite_InvalidPath(t *testing.T) {
+	// Try to write to a path where the directory doesn't exist
+	err := fsutil.AtomicWrite("/nonexistent/path/file.txt", []byte("data"), 0644)
+	assert.Error(t, err)
+}
+
+func TestRenameAndSync_NonExistentSource(t *testing.T) {
+	err := fsutil.RenameAndSync("/nonexistent/src", "/tmp/dst")
+	assert.Error(t, err)
+}

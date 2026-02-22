@@ -38,10 +38,10 @@ type RepairAction struct {
 
 // RepairResult contains the result of a repair operation.
 type RepairResult struct {
-	Action   string `json:"action"`
-	Success  bool   `json:"success"`
-	Message  string `json:"message"`
-	Cleaned  int    `json:"cleaned,omitempty"`
+	Action  string `json:"action"`
+	Success bool   `json:"success"`
+	Message string `json:"message"`
+	Cleaned int    `json:"cleaned,omitempty"`
 }
 
 // Doctor performs repository health checks.
@@ -156,15 +156,38 @@ func (d *Doctor) repairCleanIntents() RepairResult {
 }
 
 func (d *Doctor) repairAdvanceHead() RepairResult {
-	// This is a more complex repair that would:
-	// 1. Find worktrees with stale head_snapshot_id
-	// 2. Check if there's a READY snapshot with no descriptor pointing to it
-	// 3. Advance the head
-	// For now, return not implemented
+	// Find worktrees with stale head_snapshot_id and advance to latest READY
+	wtMgr := worktree.NewManager(d.repoRoot)
+	list, err := wtMgr.List()
+	if err != nil {
+		return RepairResult{Action: "advance_head", Success: false, Message: err.Error()}
+	}
+
+	advanced := 0
+	for _, cfg := range list {
+		if cfg.LatestSnapshotID == "" {
+			continue
+		}
+
+		// Check if head is stale (not pointing to latest)
+		if cfg.HeadSnapshotID != cfg.LatestSnapshotID {
+			// Verify the latest snapshot has a .READY marker
+			snapshotDir := filepath.Join(d.repoRoot, ".jvs", "snapshots", string(cfg.LatestSnapshotID))
+			readyPath := filepath.Join(snapshotDir, ".READY")
+			if _, err := os.Stat(readyPath); err == nil {
+				// Advance head to latest
+				if err := wtMgr.SetLatest(cfg.Name, cfg.LatestSnapshotID); err == nil {
+					advanced++
+				}
+			}
+		}
+	}
+
 	return RepairResult{
 		Action:  "advance_head",
-		Success: false,
-		Message: "not implemented - requires manual intervention",
+		Success: true,
+		Message: fmt.Sprintf("advanced %d stale heads to latest", advanced),
+		Cleaned: advanced,
 	}
 }
 

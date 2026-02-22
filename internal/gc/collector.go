@@ -33,7 +33,7 @@ func NewCollector(repoRoot string) *Collector {
 
 // Plan creates a GC plan.
 func (c *Collector) Plan() (*model.GCPlan, error) {
-	protectedSet, protectedByLineage, err := c.computeProtectedSet()
+	protectedSet, protectedByLineage, protectedByPin, err := c.computeProtectedSet()
 	if err != nil {
 		return nil, fmt.Errorf("compute protected set: %w", err)
 	}
@@ -64,7 +64,7 @@ func (c *Collector) Plan() (*model.GCPlan, error) {
 		PlanID:                 uuidutil.NewV4(),
 		CreatedAt:              time.Now().UTC(),
 		ProtectedSet:           protectedSet,
-		ProtectedByPin:         0, // TODO: implement pin support
+		ProtectedByPin:         protectedByPin,
 		ProtectedByLineage:     protectedByLineage,
 		CandidateCount:         len(toDelete),
 		ToDelete:               toDelete,
@@ -92,7 +92,7 @@ func (c *Collector) Run(planID string) error {
 	}
 
 	// Revalidate protected set
-	currentProtected, _, err := c.computeProtectedSet()
+	currentProtected, _, _, err := c.computeProtectedSet()
 	if err != nil {
 		return fmt.Errorf("revalidate protected set: %w", err)
 	}
@@ -142,15 +142,16 @@ func (c *Collector) Run(planID string) error {
 	return nil
 }
 
-func (c *Collector) computeProtectedSet() ([]model.SnapshotID, int, error) {
+func (c *Collector) computeProtectedSet() ([]model.SnapshotID, int, int, error) {
 	protected := make(map[model.SnapshotID]bool)
 	lineageCount := 0
+	pinCount := 0
 
 	// 1. All worktree heads
 	wtMgr := worktree.NewManager(c.repoRoot)
 	wtList, err := wtMgr.List()
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, 0, err
 	}
 	for _, cfg := range wtList {
 		if cfg.HeadSnapshotID != "" {
@@ -173,11 +174,39 @@ func (c *Collector) computeProtectedSet() ([]model.SnapshotID, int, error) {
 		}
 	}
 
+	// 4. All pins
+	pinsDir := filepath.Join(c.repoRoot, ".jvs", "pins")
+	pinEntries, err := os.ReadDir(pinsDir)
+	if err == nil {
+		for _, entry := range pinEntries {
+			name := entry.Name()
+			if strings.HasSuffix(name, ".json") {
+				pinPath := filepath.Join(pinsDir, name)
+				data, err := os.ReadFile(pinPath)
+				if err != nil {
+					continue
+				}
+				var pin model.Pin
+				if err := json.Unmarshal(data, &pin); err != nil {
+					continue
+				}
+				// Check if pin has expired
+				if pin.ExpiresAt != nil && pin.ExpiresAt.Before(time.Now()) {
+					continue // Skip expired pins
+				}
+				if !protected[pin.SnapshotID] {
+					protected[pin.SnapshotID] = true
+					pinCount++
+				}
+			}
+		}
+	}
+
 	var result []model.SnapshotID
 	for id := range protected {
 		result = append(result, id)
 	}
-	return result, lineageCount, nil
+	return result, lineageCount, pinCount, nil
 }
 
 func (c *Collector) walkLineage(snapshotID model.SnapshotID, protected map[model.SnapshotID]bool) int {

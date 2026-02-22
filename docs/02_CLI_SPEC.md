@@ -46,8 +46,13 @@ Required JSON fields:
 - `tamper_detected`
 - `severity`
 
-### `jvs conformance run [--profile dev|release] [--json]`
+### `jvs conformance run [--profile dev|full|ci] [--json]`
 Execute conformance checks defined in `docs/11_CONFORMANCE_TEST_PLAN.md`.
+
+Profiles:
+- `dev`: Development profile, runs with `-short` flag (default)
+- `full`: Full test suite including slow tests
+- `ci`: CI profile with JSON output formatting
 
 ## Worktree commands
 ### `jvs worktree create <name> [--from <snapshot-id>]`
