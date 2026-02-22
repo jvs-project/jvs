@@ -528,3 +528,215 @@ func TestMatchesFilter_NonMatchingNote(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, matches)
 }
+
+// TestCreatePartial_SinglePath tests creating a partial snapshot with a single path.
+func TestCreatePartial_SinglePath(t *testing.T) {
+	repoPath := setupTestRepo(t)
+
+	mainPath := filepath.Join(repoPath, "main")
+	// Create multiple files and directories
+	os.MkdirAll(filepath.Join(mainPath, "models"), 0755)
+	os.WriteFile(filepath.Join(mainPath, "models", "model1.pt"), []byte("model data"), 0644)
+	os.WriteFile(filepath.Join(mainPath, "config.yaml"), []byte("config"), 0644)
+	os.WriteFile(filepath.Join(mainPath, "README.md"), []byte("readme"), 0644)
+
+	creator := snapshot.NewCreator(repoPath, model.EngineCopy)
+	desc, err := creator.CreatePartial("main", "models only", nil, []string{"models"})
+	require.NoError(t, err)
+
+	// Verify PartialPaths is set
+	require.NotNil(t, desc.PartialPaths)
+	assert.Len(t, desc.PartialPaths, 1)
+	assert.Equal(t, "models", desc.PartialPaths[0])
+
+	// Verify snapshot directory structure
+	snapshotDir := filepath.Join(repoPath, ".jvs", "snapshots", string(desc.SnapshotID))
+	assert.FileExists(t, filepath.Join(snapshotDir, "models", "model1.pt"))
+	assert.NoFileExists(t, filepath.Join(snapshotDir, "config.yaml"))
+	assert.NoFileExists(t, filepath.Join(snapshotDir, "README.md"))
+}
+
+// TestCreatePartial_MultiplePaths tests creating a partial snapshot with multiple paths.
+func TestCreatePartial_MultiplePaths(t *testing.T) {
+	repoPath := setupTestRepo(t)
+
+	mainPath := filepath.Join(repoPath, "main")
+	// Create multiple files and directories
+	os.MkdirAll(filepath.Join(mainPath, "models"), 0755)
+	os.WriteFile(filepath.Join(mainPath, "models", "model1.pt"), []byte("model data"), 0644)
+	os.WriteFile(filepath.Join(mainPath, "config.yaml"), []byte("config"), 0644)
+	os.WriteFile(filepath.Join(mainPath, "README.md"), []byte("readme"), 0644)
+
+	creator := snapshot.NewCreator(repoPath, model.EngineCopy)
+	desc, err := creator.CreatePartial("main", "models and config", nil, []string{"models", "config.yaml"})
+	require.NoError(t, err)
+
+	// Verify PartialPaths is set
+	require.NotNil(t, desc.PartialPaths)
+	assert.Len(t, desc.PartialPaths, 2)
+
+	// Verify snapshot directory structure
+	snapshotDir := filepath.Join(repoPath, ".jvs", "snapshots", string(desc.SnapshotID))
+	assert.FileExists(t, filepath.Join(snapshotDir, "models", "model1.pt"))
+	assert.FileExists(t, filepath.Join(snapshotDir, "config.yaml"))
+	assert.NoFileExists(t, filepath.Join(snapshotDir, "README.md"))
+}
+
+// TestCreatePartial_SingleFile tests creating a partial snapshot of a single file.
+func TestCreatePartial_SingleFile(t *testing.T) {
+	repoPath := setupTestRepo(t)
+
+	mainPath := filepath.Join(repoPath, "main")
+	os.WriteFile(filepath.Join(mainPath, "config.yaml"), []byte("config"), 0644)
+	os.WriteFile(filepath.Join(mainPath, "README.md"), []byte("readme"), 0644)
+
+	creator := snapshot.NewCreator(repoPath, model.EngineCopy)
+	desc, err := creator.CreatePartial("main", "config only", nil, []string{"config.yaml"})
+	require.NoError(t, err)
+
+	// Verify PartialPaths is set
+	require.NotNil(t, desc.PartialPaths)
+	assert.Len(t, desc.PartialPaths, 1)
+	assert.Equal(t, "config.yaml", desc.PartialPaths[0])
+
+	// Verify snapshot directory structure
+	snapshotDir := filepath.Join(repoPath, ".jvs", "snapshots", string(desc.SnapshotID))
+	assert.FileExists(t, filepath.Join(snapshotDir, "config.yaml"))
+	assert.NoFileExists(t, filepath.Join(snapshotDir, "README.md"))
+}
+
+// TestCreatePartial_EmptyPathsEquivalentToFull tests that empty paths behaves like full snapshot.
+func TestCreatePartial_EmptyPathsEquivalentToFull(t *testing.T) {
+	repoPath := setupTestRepo(t)
+
+	mainPath := filepath.Join(repoPath, "main")
+	os.WriteFile(filepath.Join(mainPath, "file.txt"), []byte("content"), 0644)
+
+	creator := snapshot.NewCreator(repoPath, model.EngineCopy)
+
+	// Create with nil paths
+	fullDesc, err := creator.Create("main", "full", nil)
+	require.NoError(t, err)
+	assert.Nil(t, fullDesc.PartialPaths)
+
+	// Create with empty paths
+	partialDesc, err := creator.CreatePartial("main", "empty partial", nil, []string{})
+	require.NoError(t, err)
+	assert.Nil(t, partialDesc.PartialPaths)
+
+	// Both should have the same content in snapshot
+	fullSnapshotDir := filepath.Join(repoPath, ".jvs", "snapshots", string(fullDesc.SnapshotID))
+	partialSnapshotDir := filepath.Join(repoPath, ".jvs", "snapshots", string(partialDesc.SnapshotID))
+	assert.FileExists(t, filepath.Join(fullSnapshotDir, "file.txt"))
+	assert.FileExists(t, filepath.Join(partialSnapshotDir, "file.txt"))
+}
+
+// TestCreatePartial_AbsolutePathRejected tests that absolute paths are rejected.
+func TestCreatePartial_AbsolutePathRejected(t *testing.T) {
+	repoPath := setupTestRepo(t)
+
+	creator := snapshot.NewCreator(repoPath, model.EngineCopy)
+	_, err := creator.CreatePartial("main", "test", nil, []string{"/absolute/path"})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "must be relative")
+}
+
+// TestCreatePartial_PathTraversalRejected tests that paths with '..' are rejected.
+func TestCreatePartial_PathTraversalRejected(t *testing.T) {
+	repoPath := setupTestRepo(t)
+
+	creator := snapshot.NewCreator(repoPath, model.EngineCopy)
+	_, err := creator.CreatePartial("main", "test", nil, []string{"../etc/passwd"})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "cannot contain '..'")
+}
+
+// TestCreatePartial_NonExistentPathRejected tests that non-existent paths are rejected.
+func TestCreatePartial_NonExistentPathRejected(t *testing.T) {
+	repoPath := setupTestRepo(t)
+
+	creator := snapshot.NewCreator(repoPath, model.EngineCopy)
+	_, err := creator.CreatePartial("main", "test", nil, []string{"nonexistent"})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "does not exist")
+}
+
+// TestCreatePartial_DuplicatePathsDeduplicated tests that duplicate paths are deduplicated.
+func TestCreatePartial_DuplicatePathsDeduplicated(t *testing.T) {
+	repoPath := setupTestRepo(t)
+
+	mainPath := filepath.Join(repoPath, "main")
+	os.MkdirAll(filepath.Join(mainPath, "models"), 0755)
+	os.WriteFile(filepath.Join(mainPath, "models", "model1.pt"), []byte("model"), 0644)
+
+	creator := snapshot.NewCreator(repoPath, model.EngineCopy)
+	desc, err := creator.CreatePartial("main", "duplicates", nil, []string{"models", "models", "models"})
+	require.NoError(t, err)
+
+	// Should only have one entry after deduplication
+	assert.Len(t, desc.PartialPaths, 1)
+	assert.Equal(t, "models", desc.PartialPaths[0])
+}
+
+// TestCreatePartial_NestedDirectories tests partial snapshot with nested directory paths.
+func TestCreatePartial_NestedDirectories(t *testing.T) {
+	repoPath := setupTestRepo(t)
+
+	mainPath := filepath.Join(repoPath, "main")
+	os.MkdirAll(filepath.Join(mainPath, "models", "checkpoints"), 0755)
+	os.WriteFile(filepath.Join(mainPath, "models", "model1.pt"), []byte("model"), 0644)
+	os.WriteFile(filepath.Join(mainPath, "models", "checkpoints", "checkpoint.pt"), []byte("checkpoint"), 0644)
+
+	creator := snapshot.NewCreator(repoPath, model.EngineCopy)
+	desc, err := creator.CreatePartial("main", "nested", nil, []string{"models"})
+	require.NoError(t, err)
+
+	// Both files should be included (parent directory includes all children)
+	snapshotDir := filepath.Join(repoPath, ".jvs", "snapshots", string(desc.SnapshotID))
+	assert.FileExists(t, filepath.Join(snapshotDir, "models", "model1.pt"))
+	assert.FileExists(t, filepath.Join(snapshotDir, "models", "checkpoints", "checkpoint.pt"))
+}
+
+// TestCreatePartial_WithTags tests partial snapshot with tags.
+func TestCreatePartial_WithTags(t *testing.T) {
+	repoPath := setupTestRepo(t)
+
+	mainPath := filepath.Join(repoPath, "main")
+	os.MkdirAll(filepath.Join(mainPath, "models"), 0755)
+	os.WriteFile(filepath.Join(mainPath, "models", "model1.pt"), []byte("model"), 0644)
+
+	creator := snapshot.NewCreator(repoPath, model.EngineCopy)
+	desc, err := creator.CreatePartial("main", "tagged partial", []string{"v1.0", "models"}, []string{"models"})
+	require.NoError(t, err)
+
+	assert.Equal(t, []string{"v1.0", "models"}, desc.Tags)
+	assert.Len(t, desc.PartialPaths, 1)
+}
+
+// TestCreatePartial_CallCreateViaCreatePartial tests that Create() properly delegates to CreatePartial.
+func TestCreatePartial_CallCreateViaCreatePartial(t *testing.T) {
+	repoPath := setupTestRepo(t)
+
+	mainPath := filepath.Join(repoPath, "main")
+	os.WriteFile(filepath.Join(mainPath, "file.txt"), []byte("content"), 0644)
+
+	creator := snapshot.NewCreator(repoPath, model.EngineCopy)
+
+	// Create via Create (should call CreatePartial with nil)
+	desc1, err := creator.Create("main", "via Create", nil)
+	require.NoError(t, err)
+
+	// Create via CreatePartial with nil
+	desc2, err := creator.CreatePartial("main", "via CreatePartial", nil, nil)
+	require.NoError(t, err)
+
+	// Both should have nil PartialPaths
+	assert.Nil(t, desc1.PartialPaths)
+	assert.Nil(t, desc2.PartialPaths)
+
+	// Both should have the snapshoted file
+	snapshotDir1 := filepath.Join(repoPath, ".jvs", "snapshots", string(desc1.SnapshotID))
+	snapshotDir2 := filepath.Join(repoPath, ".jvs", "snapshots", string(desc2.SnapshotID))
+	assert.FileExists(t, filepath.Join(snapshotDir1, "file.txt"))
+	assert.FileExists(t, filepath.Join(snapshotDir2, "file.txt"))
+}

@@ -210,6 +210,46 @@ This creates a new directory at `worktrees/feature-branch/` that you can `cd` in
 
 ---
 
+### How do I create a partial snapshot?
+
+**Partial snapshots** allow you to snapshot only specific paths within a worktree, rather than the entire workspace. This is useful for:
+
+- Large models that change infrequently
+- Training data that doesn't need versioning
+- Temporary files or caches
+- Selective backup strategies
+
+```bash
+# Snapshot only the models/ directory
+jvs snapshot "model checkpoint" --paths models/
+
+# Snapshot multiple specific paths
+jvs snapshot "models and config" --paths models/ config.yaml
+
+# Snapshot a single file
+jvs snapshot "config backup" --paths config.yaml
+```
+
+**Important notes:**
+- Paths must be relative to the worktree root
+- Absolute paths are rejected (security measure)
+- Paths containing `..` are rejected (prevents traversal attacks)
+- Non-existent paths are rejected with clear error messages
+- Duplicate paths are automatically deduplicated
+- Partial snapshots store the list of included paths in their descriptor
+
+**Can I restore a partial snapshot?**
+Yes! When you restore a partial snapshot, only the paths included in that snapshot are restored in your worktree. Paths not included in the partial snapshot remain unchanged.
+
+**How can I tell if a snapshot is partial?**
+Check the descriptor:
+```bash
+jvs inspect <snapshot-id>
+```
+Partial snapshots will show `"partial_paths": ["path1", "path2"]` in the output. Full snapshots have `"partial_paths": null` or an empty array.
+
+---
+
 ## Common Misconceptions
 
 ### Misconception: "JVS is a Git replacement"
@@ -497,10 +537,11 @@ See [CONTRIBUTING.md](../CONTRIBUTING.md) for details.
 ### What's planned for v8.0?
 
 See [ROADMAP.md](../ROADMAP.md) for v8.0 candidates:
-- Partial snapshots
 - Remote sync helpers
 - Snapshot templates
 - And more...
+
+**Partial snapshots are now available!** See [How do I create a partial snapshot?](#how-do-i-create-a-partial-snapshot) below.
 
 ---
 

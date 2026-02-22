@@ -20,7 +20,6 @@ import (
 	"github.com/jvs-project/jvs/internal/gc"
 	"github.com/jvs-project/jvs/internal/repo"
 	"github.com/jvs-project/jvs/internal/snapshot"
-	"github.com/jvs-project/jvs/pkg/model"
 )
 
 // TestStress_10kFiles tests snapshot performance with 10,000 files.
@@ -76,7 +75,7 @@ func TestStress_10kFiles(t *testing.T) {
 	os.RemoveAll(mainPath)
 	os.MkdirAll(mainPath, 0755)
 	elapsed = time.Since(start)
-	t.Logf("Cleanup completed in %v")
+	t.Logf("Cleanup completed in %v", elapsed)
 }
 
 // TestStress_LargePayload tests snapshot with 1GB+ payload.
@@ -241,7 +240,7 @@ func TestStress_DeepNesting(t *testing.T) {
 	t.Log("Creating snapshot...")
 	start = time.Now()
 	creator := snapshot.NewCreator(repoPath, "copy")
-	_, err = creator.Create("deep", []string{"nesting"})
+	_, err = creator.Create("main", "deep", nil)
 	if err != nil {
 		t.Fatalf("create snapshot: %v", err)
 	}
@@ -279,7 +278,7 @@ func TestStress_ManySymlinks(t *testing.T) {
 	t.Log("Creating snapshot...")
 	start = time.Now()
 	creator := snapshot.NewCreator(repoPath, "copy")
-	_, err = creator.Create("links", []string{"symlinks"})
+	_, err = creator.Create("main", "symlinks", nil)
 	if err != nil {
 		t.Fatalf("create snapshot: %v", err)
 	}
@@ -316,7 +315,7 @@ func TestStress_LongFilenames(t *testing.T) {
 	t.Log("Creating snapshot...")
 	start = time.Now()
 	creator := snapshot.NewCreator(repoPath, "copy")
-	_, err = creator.Create("longnames", []string{"files"})
+	_, err = creator.Create("main", "longnames", nil)
 	if err != nil {
 		t.Fatalf("create snapshot: %v", err)
 	}
@@ -354,7 +353,7 @@ func TestStress_MemoryUsage(t *testing.T) {
 		testFile := filepath.Join(mainPath, "counter.txt")
 		os.WriteFile(testFile, []byte(fmt.Sprintf("%d", i)), 0644)
 
-		_, err := creator.Create("main", []string{"mem"})
+		_, err := creator.Create("main", "mem", nil)
 		if err != nil {
 			t.Fatalf("snapshot %d: %v", i, err)
 		}
@@ -441,7 +440,7 @@ func createDeepNesting(t *testing.T, base string, maxDepth int) {
 	for depth := 0; depth < maxDepth; depth++ {
 		// Create a file at this level
 		filePath := filepath.Join(current, fmt.Sprintf("level%d.txt", depth))
-		if err := os.WriteFile(filePathPath, []byte(fmt.Sprintf("Level %d", depth)), 0644); err != nil {
+		if err := os.WriteFile(filePath, []byte(fmt.Sprintf("Level %d", depth)), 0644); err != nil {
 			t.Fatalf("write %s: %v", filePath, err)
 		}
 
@@ -478,7 +477,13 @@ func createLongNamedFiles(t *testing.T, dir string, count, nameLength int) {
 
 	for i := 0; i < count; i++ {
 		// Create a long name with repeating pattern
-		longName := strings.Repeat(fmt.Sprintf("file%d_", i), nameLength/10)[:nameLength]
+		pattern := strings.Repeat(fmt.Sprintf("file%d_", i), 50)
+		var longName string
+		if len(pattern) > nameLength {
+			longName = pattern[:nameLength]
+		} else {
+			longName = pattern + strings.Repeat("_", nameLength-len(pattern))
+		}
 		filePath := filepath.Join(dir, longName)
 		if err := os.WriteFile(filePath, []byte("content"), 0644); err != nil {
 			t.Fatalf("write %s: %v", filePath, err)
@@ -518,6 +523,6 @@ func BenchmarkSnapshot_100Files(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		testFile := filepath.Join(mainPath, "bench.txt")
 		os.WriteFile(testFile, []byte(fmt.Sprintf("bench %d", i)), 0644)
-		creator.Create("main", []string{"bench"})
+		creator.Create("main", "bench", nil)
 	}
 }
