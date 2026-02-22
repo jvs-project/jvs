@@ -40,8 +40,6 @@ type SnapshotReconciler struct {
 
 // Reconcile is the main reconciliation loop for Snapshot resources
 func (r *SnapshotReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	log := log.FromContext(ctx)
-
 	// Fetch the Snapshot instance
 	snapshot := &jvsiov1alpha1.Snapshot{}
 	err := r.Get(ctx, req.NamespacedName, snapshot)
@@ -112,7 +110,7 @@ func (r *SnapshotReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 
 // createSnapshot initiates snapshot creation
 func (r *SnapshotReconciler) createSnapshot(ctx context.Context, snapshot *jvsiov1alpha1.Snapshot, workspace *jvsiov1alpha1.Workspace) (ctrl.Result, error) {
-	log := log.FromContext(ctx)
+	logger := log.FromContext(ctx)
 
 	now := metav1.Now()
 	snapshot.Status.Phase = jvsiov1alpha1.SnapshotPhaseInProgress
@@ -127,7 +125,7 @@ func (r *SnapshotReconciler) createSnapshot(ctx context.Context, snapshot *jvsio
 	// In production, this would run in a pod with the workspace volume mounted
 	snapshotID, err := r.executeSnapshot(ctx, snapshot, workspace)
 	if err != nil {
-		log.Error(err, "Failed to create snapshot")
+		logger.Error(err, "Failed to create snapshot")
 		r.updateSnapshotStatus(ctx, snapshot, jvsiov1alpha1.SnapshotPhaseFailed, err.Error())
 		return ctrl.Result{RequeueAfter: snapshotRequeueOnFailure}, nil
 	}
@@ -150,12 +148,12 @@ func (r *SnapshotReconciler) executeSnapshot(ctx context.Context, snapshot *jvsi
 
 // monitorSnapshot monitors snapshot creation progress
 func (r *SnapshotReconciler) monitorSnapshot(ctx context.Context, snapshot *jvsiov1alpha1.Snapshot, workspace *jvsiov1alpha1.Workspace) (ctrl.Result, error) {
-	log := log.FromContext(ctx)
+	logger := log.FromContext(ctx)
 
 	// Check if snapshot is complete
 	complete, err := r.checkSnapshotComplete(ctx, snapshot)
 	if err != nil {
-		log.Error(err, "Failed to check snapshot status")
+		logger.Error(err, "Failed to check snapshot status")
 		return ctrl.Result{RequeueAfter: snapshotRequeueOnFailure}, err
 	}
 
@@ -182,7 +180,7 @@ func (r *SnapshotReconciler) monitorSnapshot(ctx context.Context, snapshot *jvsi
 	// Update workspace snapshot time
 	workspace.Status.LastSnapshotTime = &now
 	if err := r.Status().Update(ctx, workspace); err != nil {
-		log.Error(err, "Failed to update workspace status")
+		logger.Error(err, "Failed to update workspace status")
 	}
 
 	return ctrl.Result{}, r.Status().Update(ctx, snapshot)
@@ -200,13 +198,13 @@ func (r *SnapshotReconciler) checkSnapshotComplete(ctx context.Context, snapshot
 
 // createRestore creates a worktree from the snapshot
 func (r *SnapshotReconciler) createRestore(ctx context.Context, snapshot *jvsiov1alpha1.Snapshot, workspace *jvsiov1alpha1.Workspace) (ctrl.Result, error) {
-	log := log.FromContext(ctx)
+	logger := log.FromContext(ctx)
 
 	now := metav1.Now()
 	snapshot.Status.RestoreStatus = &jvsiov1alpha1.RestoreStatus{
-		Phase:       jvsiov1alpha1.RestorePhaseInProgress,
+		Phase:        jvsiov1alpha1.RestorePhaseInProgress,
 		WorktreeName: snapshot.Spec.RestoreWorktree,
-		StartedAt:   &now,
+		StartedAt:    &now,
 	}
 
 	if err := r.Status().Update(ctx, snapshot); err != nil {
@@ -216,7 +214,7 @@ func (r *SnapshotReconciler) createRestore(ctx context.Context, snapshot *jvsiov
 	// Execute jvs restore command
 	err := r.executeRestore(ctx, snapshot, workspace)
 	if err != nil {
-		log.Error(err, "Failed to create restore")
+		logger.Error(err, "Failed to create restore")
 		snapshot.Status.RestoreStatus.Phase = jvsiov1alpha1.RestorePhaseFailed
 		completed := metav1.Now()
 		snapshot.Status.RestoreStatus.CompletedAt = &completed

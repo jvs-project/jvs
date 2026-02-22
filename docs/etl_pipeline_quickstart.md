@@ -1,0 +1,607 @@
+# JVS Quick Start: Data ETL Pipelines
+
+**Version:** v7.0
+**Last Updated:** 2026-02-23
+
+---
+
+## Overview
+
+This guide helps data engineers use JVS for versioning large datasets in ETL pipelines. JVS provides O(1) snapshots for TB-scale data, enabling reproducible data workflows.
+
+---
+
+## Why JVS for ETL Pipelines?
+
+| Problem | Git + Git LFS | DVC | JVS |
+|---------|---------------|-----|-----|
+| TB-scale datasets | Doesn't scale | Complex cache management | O(1) snapshots |
+| Pipeline integration | Manual | Requires DVC CLI | Simple CLI integration |
+| Data lineage | Manual tracking | DVC metrics | Snapshot notes + tags |
+| Reproducibility | Difficult | Good | Excellent |
+
+**Key Benefit:** Snapshot entire datasets (10GB-10TB) in seconds, enabling exact reproducibility.
+
+---
+
+## Prerequisites
+
+1. **JuiceFS mounted** (recommended for O(1) performance)
+2. **JVS installed**
+3. **ETL pipeline** (Python, SQL, or any tool)
+
+---
+
+## Quick Start (5 Minutes)
+
+### Step 1: Initialize Data Workspace
+
+```bash
+# Navigate to your JuiceFS mount
+cd /mnt/juicefs/data-lake
+
+# Initialize JVS repository
+jvs init etl-pipeline
+cd etl-pipeline/main
+
+# Create initial structure
+mkdir -p raw/ processed/ features/ models/
+```
+
+### Step 2: Create Baseline Snapshot
+
+```bash
+# Copy initial data (or start empty)
+cp -r /source/data/* raw/
+
+# Create baseline
+jvs snapshot "Initial raw data import" --tag baseline --tag raw
+```
+
+### Step 3: ETL Pipeline with Snapshots
+
+```bash
+#!/bin/bash
+# Simple ETL pipeline
+
+# Stage 1: Ingest raw data
+echo "Ingesting raw data..."
+cp /source/new_data/* raw/
+jvs snapshot "Raw ingestion: 2024-02-23" --tag raw --tag $(date +%Y-%m-%d)
+
+# Stage 2: Process data
+echo "Processing data..."
+python process.py --input raw/ --output processed/
+jvs snapshot "Processed data: cleaned, normalized" --tag processed --tag $(date +%Y-%m-%d)
+
+# Stage 3: Feature engineering
+echo "Building features..."
+python build_features.py --input processed/ --output features/
+jvs snapshot "Features: v2.0 schema" --tag features --tag $(date +%Y-%m-%d)
+
+# Stage 4: Train model
+echo "Training model..."
+python train.py --input features/ --output models/model.pkl
+jvs snapshot "Model trained on $(date +%Y-%m-%d)" --tag model --tag $(date +%Y-%m-%d)
+```
+
+---
+
+## Common Patterns
+
+### Pattern 1: Daily ETL Pipeline
+
+```bash
+#!/bin/bash
+# daily_etl.sh
+
+set -e
+
+TODAY=$(date +%Y-%m-%d)
+cd /mnt/juicefs/data-lake/etl-pipeline/main
+
+# Reset to baseline
+jvs restore baseline
+
+# 1. Extract: Copy from source
+echo "Extracting data for $TODAY..."
+aws s3 sync s3://data-lake/raw/$TODAY/ raw/
+
+# 2. Transform: Clean and process
+echo "Transforming data..."
+python transform.py --input raw/ --output processed/ --date $TODAY
+
+# 3. Load: Load to warehouse
+echo "Loading to warehouse..."
+python load_to_warehouse.py --input processed/ --date $TODAY
+
+# 4. Snapshot the completed pipeline
+jvs snapshot "ETL pipeline complete: $TODAY" --tag etl --tag $TODAY
+
+# Send notification
+echo "ETL pipeline completed for $TODAY"
+```
+
+### Pattern 2: Incremental Processing
+
+```bash
+#!/bin/bash
+# Incremental updates (only snapshot what changes)
+
+LATEST_SNAPSHOT=$(jvs history | grep processed | head -1 | awk '{print $1}')
+
+# Restore to last processed state
+jvs restore $LATEST_SNAPSHOT
+
+# Add new data
+cat /source/incremental_*.csv >> raw/new_data.csv
+
+# Process only new data
+python process_incremental.py --input raw/new_data.csv --output processed/incremental/
+
+# Snapshot only the changed paths
+jvs snapshot "Incremental update: $(date +%Y-%m-%d)" \
+    --paths raw/new_data.csv \
+    --paths processed/incremental/ \
+    --tag incremental
+```
+
+### Pattern 3: Data Quality Checks with Rollback
+
+```bash
+#!/bin/bash
+# ETL with quality checks and automatic rollback
+
+cd /mnt/juicefs/data-lake/etl-pipeline/main
+
+# Restore baseline
+jvs restore baseline
+
+# Run ETL
+python etl_pipeline.py
+
+# Run quality checks
+echo "Running quality checks..."
+python quality_check.py --input processed/
+
+if [ $? -eq 0 ]; then
+    # Quality check passed - snapshot
+    jvs snapshot "ETL + QC passed: $(date +%Y-%m-%d)" --tag etl --tag passed
+    echo "ETL pipeline completed successfully"
+else
+    # Quality check failed - restore and alert
+    jvs restore baseline
+    echo "ETL pipeline failed quality check - restored to baseline"
+    # Send alert...
+    exit 1
+fi
+```
+
+---
+
+## Airflow Integration
+
+### Simple Airflow DAG
+
+```python
+# airflow_dags/jvs_etl.py
+
+from airflow import DAG
+from airflow.operators.bash import BashOperator
+from datetime import datetime, timedelta
+
+default_args = {
+    'owner': 'data-team',
+    'depends_on_past': False,
+    'start_date': datetime(2024, 1, 1),
+    'email': ['data-team@example.com'],
+    'email_on_failure': True,
+}
+
+JVS_PATH = '/mnt/juicefs/data-lake/etl-pipeline/main'
+
+with DAG('jvs_etl_pipeline', default_args=default_args, schedule_interval='@daily') as dag:
+
+    # Restore to baseline
+    restore_baseline = BashOperator(
+        task_id='restore_baseline',
+        bash_command=f'cd {JVS_PATH} && jvs restore baseline'
+    )
+
+    # Extract data
+    extract = BashOperator(
+        task_id='extract',
+        bash_command=f'cd {JVS_PATH} && python extract.py --date {{ ds_nodash }}'
+    )
+
+    # Snapshot after extract
+    snapshot_extract = BashOperator(
+        task_id='snapshot_extract',
+        bash_command=f'cd {JVS_PATH} && jvs snapshot "Extract complete: {{{{ ds_nodash }}}}" --tag extract --tag {{{{ ds_nodash }}}}'
+    )
+
+    # Transform data
+    transform = BashOperator(
+        task_id='transform',
+        bash_command=f'cd {JVS_PATH} && python transform.py --date {{ ds_nodash }}'
+    )
+
+    # Snapshot after transform
+    snapshot_transform = BashOperator(
+        task_id='snapshot_transform',
+        bash_command=f'cd {JVS_PATH} && jvs snapshot "Transform complete: {{{{ ds_nodash }}}}" --tag transform --tag {{{{ ds_nodash }}}}'
+    )
+
+    # Load data
+    load = BashOperator(
+        task_id='load',
+        bash_command=f'cd {JVS_PATH} && python load.py --date {{ ds_nodash }}'
+    )
+
+    # Final snapshot
+    snapshot_final = BashOperator(
+        task_id='snapshot_final',
+        bash_command=f'cd {JVS_PATH} && jvs snapshot "ETL complete: {{{{ ds_nodash }}}}" --tag etl --tag {{{{ ds_nodash }}}}'
+    )
+
+    # Define dependencies
+    restore_baseline >> extract >> snapshot_extract >> transform >> snapshot_transform >> load >> snapshot_final
+```
+
+### Custom Airflow Operator
+
+```python
+# airflow_plugins/operators/jvs_operator.py
+
+from airflow.models.baseoperator import BaseOperator
+from airflow.utils.decorators import apply_defaults
+import subprocess
+import json
+
+class JVSSnapshotOperator(BaseOperator):
+    """Airflow operator to create JVS snapshot"""
+
+    @apply_defaults
+    def __init__(self, jvs_path, note, tags=None, **kwargs):
+        super().__init__(**kwargs)
+        self.jvs_path = jvs_path
+        self.note = note
+        self.tags = tags or []
+
+    def execute(self, context):
+        # Build JVS command
+        cmd = ['jvs', 'snapshot', self.note]
+        for tag in self.tags:
+            cmd.extend(['--tag', tag])
+
+        # Execute JVS snapshot
+        result = subprocess.run(
+            cmd,
+            cwd=self.jvs_path,
+            capture_output=True,
+            text=True
+        )
+
+        if result.returncode != 0:
+            raise Exception(f"JVS snapshot failed: {result.stderr}")
+
+        # Return snapshot ID for XCom
+        output = json.loads(result.stdout)
+        return output.get('snapshot_id')
+
+# Usage in DAG
+from airflow_plugins.operators.jvs_operator import JVSSnapshotOperator
+
+snapshot = JVSSnapshotOperator(
+    task_id='create_snapshot',
+    jvs_path='/mnt/juicefs/data-lake/etl-pipeline/main',
+    note='ETL complete: {{ ds_nodash }}',
+    tags=['etl', '{{ ds_nodash }}']
+)
+```
+
+---
+
+## ML Pipeline Integration
+
+### MLflow + JVS
+
+```python
+#!/usr/bin/env python3
+# ml_pipeline.py
+
+import subprocess
+import mlflow
+import mlflow.sklearn
+from sklearn.ensemble import RandomForestClassifier
+
+def run_ml_pipeline_with_jvs():
+    """Run ML pipeline with JVS snapshots"""
+
+    # Reset to baseline
+    subprocess.run(['jvs', 'restore', 'baseline'], check=True)
+
+    # Start MLflow run
+    with mlflow.start_run():
+        # Load data
+        X_train, y_train = load_data('processed/train.csv')
+        X_test, y_test = load_data('processed/test.csv')
+
+        # Train model
+        model = RandomForestClassifier(n_estimators=100)
+        model.fit(X_train, y_train)
+
+        # Log parameters and metrics
+        mlflow.log_params({'n_estimators': 100})
+        mlflow.log_metrics({'accuracy': model.score(X_test, y_test)})
+
+        # Save model
+        model_path = 'models/model.pkl'
+        mlflow.sklearn.save_model(model, model_path)
+
+        # Create JVS snapshot with MLflow run info
+        run_id = mlflow.active_run().info.run_id
+        subprocess.run([
+            'jvs', 'snapshot',
+            f'Model trained: MLflow run {run_id[:8]}, accuracy={model.score(X_test, y_test):.3f}',
+            '--tag', 'mlflow',
+            '--tag', 'model',
+            '--tag', f'run-{run_id[:8]}'
+        ], check=True)
+
+if __name__ == '__main__':
+    run_ml_pipeline_with_jvs()
+```
+
+---
+
+## Best Practices
+
+### 1. Snapshot After Each Pipeline Stage
+
+```bash
+# Good: Checkpoint after each stage
+extract_data && jvs snapshot "Extract done" --tag extract
+transform_data && jvs snapshot "Transform done" --tag transform
+load_data && jvs snapshot "Load done" --tag load
+
+# Bad: Only snapshot at the end (hard to debug failures)
+extract_data && transform_data && load_data && jvs snapshot "ETL done"
+```
+
+### 2. Tag by Date and Pipeline Stage
+
+```bash
+# Tag with date
+jvs snapshot "..." --tag $(date +%Y-%m-%d)
+
+# Tag with stage
+jvs snapshot "..." --tag extract --tag processed
+
+# Find all snapshots for a date
+jvs history --tag 2024-02-23
+```
+
+### 3. Use Meaningful Snapshot Notes
+
+```bash
+# Good: Includes context
+jvs snapshot "Customer data: added 50k new rows, cleaned null emails, normalized phone numbers"
+
+# Bad: Generic
+jvs snapshot "Data updated"
+```
+
+### 4. Regular Verification
+
+```bash
+# Verify data integrity
+jvs verify --all
+
+# Verify specific snapshot
+jvs verify abc123
+```
+
+---
+
+## Advanced Workflows
+
+### Workflow 1: A/B Test Different Pipelines
+
+```bash
+# Pipeline A: Current approach
+jvs worktree fork pipeline-a
+cd worktrees/pipeline-a/main
+jvs restore baseline
+python pipeline_a.py
+jvs snapshot "Pipeline A: accuracy=0.85" --tag pipeline-a --tag baseline
+
+# Pipeline B: Experimental approach
+cd ../../main
+jvs worktree fork pipeline-b
+cd worktrees/pipeline-b/main
+jvs restore baseline
+python pipeline_b.py
+jvs snapshot "Pipeline B: accuracy=0.87" --tag pipeline-b --tag experimental
+```
+
+### Workflow 2: Schema Migration Tracking
+
+```bash
+#!/bin/bash
+# Track schema changes with JVS
+
+# Schema v1
+jvs snapshot "Schema v1: customer_id, name, email" --tag schema --tag v1
+
+# Apply migration
+python migrate_v1_to_v2.py
+
+# Schema v2
+jvs snapshot "Schema v2: added phone, address fields" --tag schema --tag v2
+
+# Apply another migration
+python migrate_v2_to_v3.py
+
+# Schema v3
+jvs snapshot "Schema v3: normalized phone format, added created_at" --tag schema --tag v3
+
+# To rollback to v2:
+jvs restore --latest-tag v2
+```
+
+### Workflow 3: Multi-Region Data Sync
+
+```bash
+#!/bin/bash
+# Sync data snapshots across regions
+
+# Create snapshot in primary region
+cd /mnt/juicefs-primary/data/main
+jvs snapshot "Daily data sync: $(date +%Y-%m-%d)" --tag sync --tag $(date +%Y-%m-%d)
+SNAPSHOT_ID=$(jvs history --format json | jq -r '.[0].id')
+
+# Sync JVS metadata to secondary region
+rsync -avz .jvs/ /mnt/juicefs-secondary/data/.jvs/
+
+# In secondary region, verify and use snapshot
+cd /mnt/juicefs-secondary/data/main
+jvs verify $SNAPSHOT_ID
+jvs restore $SNAPSHOT_ID
+```
+
+---
+
+## Performance Tips
+
+### Use Partial Snapshots for Large Datasets
+
+```bash
+# Snapshot only specific directories
+jvs snapshot "Raw data update" --paths raw/
+jvs snapshot "Features update" --paths features/
+
+# Or exclude large unchanged directories
+jvs snapshot "Code update only" --paths scripts/ --paths config/
+```
+
+### Schedule GC During Off-Peak Hours
+
+```bash
+# Run GC cron job at 3 AM daily
+0 3 * * * cd /mnt/juicefs/data/main && jvs gc plan --keep-daily 30 && jvs gc run --plan-id <plan-id>
+```
+
+### Use Tags for Efficient Queries
+
+```bash
+# Find all snapshots for a specific date
+jvs history --tag 2024-02-23
+
+# Find all failed pipeline runs
+jvs history | grep "failed"
+
+# Find all model training snapshots
+jvs history --tag model
+```
+
+---
+
+## Troubleshooting
+
+### Problem: Out of space
+
+**Solution:** Run garbage collection
+```bash
+jvs gc plan --keep-daily 30
+jvs gc run --plan-id <plan-id>
+```
+
+### Problem: Can't find data for specific date
+
+**Solution:** Use date tags
+```bash
+jvs history --tag 2024-02-23
+```
+
+### Problem: Verify fails
+
+**Solution:** Data may have been modified outside JVS
+```bash
+# Check what changed
+find . -newer .jvs/snapshots/abc123
+
+# Restore from snapshot
+jvs restore abc123
+```
+
+---
+
+## Integration Examples
+
+### dbt + JVS
+
+```bash
+#!/bin/bash
+# dbt pipeline with JVS snapshots
+
+# Restore baseline
+jvs restore baseline
+
+# Run dbt
+dbt run
+
+# Snapshot dbt artifacts
+jvs snapshot "dbt run complete: $(date +%Y-%m-%d)" \
+    --paths target/ \
+    --paths dbt_packages/ \
+    --tag dbt --tag $(date +%Y-%m-%d)
+```
+
+### Spark + JVS
+
+```python
+#!/usr/bin/env python3
+# spark_pipeline.py
+
+import subprocess
+from pyspark.sql import SparkSession
+
+def run_spark_with_jvs():
+    """Run Spark job with JVS snapshot"""
+
+    # Restore baseline
+    subprocess.run(['jvs', 'restore', 'baseline'], check=True)
+
+    # Run Spark
+    spark = SparkSession.builder.appName("ETL").getOrCreate()
+
+    # Read data
+    df = spark.read.parquet("raw/data")
+
+    # Transform
+    df_transformed = df.groupBy("column").count()
+
+    # Write output
+    df_transformed.write.parquet("processed/output")
+
+    # Snapshot results
+    subprocess.run([
+        'jvs', 'snapshot',
+        f'Spark job complete: {df_transformed.count()} rows processed',
+        '--tag', 'spark',
+        '--tag', 'etl'
+    ], check=True)
+
+if __name__ == '__main__':
+    run_spark_with_jvs()
+```
+
+---
+
+## Next Steps
+
+- Read [GAME_DEV_QUICKSTART.md](game_dev_quickstart.md) for game workflows
+- Read [AGENT_SANDBOX_QUICKSTART.md](agent_sandbox_quickstart.md) for agent workflows
+- Read [CASE_STUDIES.md](CASE_STUDIES.md) for real-world examples
+- Join the community: [GitHub Discussions](https://github.com/jvs-project/jvs/discussions)
