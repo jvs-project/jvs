@@ -84,6 +84,24 @@ Show snapshot history.
 - `--tag <tag>` filters by tag
 - `--all` shows all snapshots (not just current worktree lineage)
 
+### `jvs diff [<from> [<to>]] [--stat] [--json]`
+Show differences between two snapshots.
+- With no arguments: compares the two most recent snapshots
+- With one argument: compares that snapshot with itself (full output)
+- With two arguments: compares from-snapshot to to-snapshot
+- `--stat` shows summary statistics only
+- Snapshot references can be: full ID, short ID prefix, tag name, or `HEAD`
+
+Required JSON fields:
+- `from_snapshot_id`
+- `to_snapshot_id`
+- `from_time`
+- `to_time`
+- `added` - array of added file paths with metadata
+- `removed` - array of removed file paths with metadata
+- `modified` - array of modified file paths with old/new sizes
+- `total_added`, `total_removed`, `total_modified`
+
 ## Restore commands
 ### `jvs restore <snapshot-id> [--json]`
 Inplace restore: restore current worktree to the specified snapshot.

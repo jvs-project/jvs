@@ -494,6 +494,7 @@ func createTestRootCmd() *cobra.Command {
 	cmd.AddCommand(doctorCmd)
 	cmd.AddCommand(verifyCmd)
 	cmd.AddCommand(gcCmd)
+	cmd.AddCommand(completionCmd)
 
 	return cmd
 }
@@ -1458,4 +1459,49 @@ func TestDetectEngineFallback(t *testing.T) {
 	// Should fall back to EngineCopy
 	engineType := detectEngine("/nonexistent/path/that/does/not/exist")
 	assert.Equal(t, model.EngineCopy, engineType)
+}
+
+// TestCompletionCommand tests the completion command.
+func TestCompletionCommand(t *testing.T) {
+	cmd := createTestRootCmd()
+	cmd.AddCommand(completionCmd)
+
+	// Test bash completion
+	stdout, err := executeCommand(cmd, "completion", "bash")
+	require.NoError(t, err)
+	assert.Contains(t, stdout, "bash completion")
+	assert.Contains(t, stdout, "complete")
+
+	// Test zsh completion
+	cmd2 := createTestRootCmd()
+	cmd2.AddCommand(completionCmd)
+	stdout, err = executeCommand(cmd2, "completion", "zsh")
+	require.NoError(t, err)
+	assert.Contains(t, stdout, "compdef")
+}
+
+// TestCompletionCommandHelp tests completion command help.
+func TestCompletionCommandHelp(t *testing.T) {
+	cmd := createTestRootCmd()
+	cmd.AddCommand(completionCmd)
+
+	stdout, err := executeCommand(cmd, "completion", "--help")
+	require.NoError(t, err)
+	assert.Contains(t, stdout, "Generate shell completion")
+	assert.Contains(t, stdout, "bash")
+	assert.Contains(t, stdout, "zsh")
+	assert.Contains(t, stdout, "fish")
+}
+
+// TestCompletionCommandValidArgs tests completion command accepts only valid shell types.
+func TestCompletionCommandValidArgs(t *testing.T) {
+	cmd := createTestRootCmd()
+	cmd.AddCommand(completionCmd)
+
+	// Check that completion command has valid args defined
+	assert.NotNil(t, completionCmd.ValidArgs)
+	assert.Contains(t, completionCmd.ValidArgs, "bash")
+	assert.Contains(t, completionCmd.ValidArgs, "zsh")
+	assert.Contains(t, completionCmd.ValidArgs, "fish")
+	assert.Contains(t, completionCmd.ValidArgs, "powershell")
 }

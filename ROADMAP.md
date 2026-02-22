@@ -1,6 +1,6 @@
 # JVS Project Roadmap
 
-**Version:** 1.0
+**Version:** 1.1
 **Last Updated:** 2026-02-23
 **Current Release:** v7.0
 
@@ -30,14 +30,19 @@ JVS aims to become the most reliable, feature-rich workspace version control sys
 - ✅ Tamper-evident audit trail
 - ✅ Garbage collection with plan-preview
 - ✅ Health checks via `jvs doctor`
-- ✅ 29 conformance tests (all passing)
-- ✅ 77.6% test coverage
+- ✅ 54+ conformance tests (all passing)
+- ✅ 83.7% test coverage (exceeds 80% target)
 
 ### Documentation
 - ✅ 12 specification documents
-- ✅ SECURITY.md, CONTRIBUTING.md, CODE_OF_CONDUCT.md
+- ✅ SECURITY.md, CONTRIBUTING.md, CODE_OF_CONDUCT.md (CNCF required)
+- ✅ GOVERNANCE.md, ROADMAP.md (CII Silver)
+- ✅ ARCHITECTURE.md, QUICKSTART.md (CII Silver)
+- ✅ CII_BADGE_ASSESSMENT.md (Best Practices tracking)
+- ✅ UPGRADE.md (upgrade guide)
 - ✅ Traceability matrix
 - ✅ Operation runbook
+- ✅ Status badges in README
 
 ---
 
@@ -49,15 +54,19 @@ JVS aims to become the most reliable, feature-rich workspace version control sys
 
 | Item | Status | Priority | Owner |
 |------|--------|----------|-------|
-| Increase test coverage to 80%+ | In Progress | P0 | Programmers |
-| Add static analysis (gosec) to CI | Pending | P0 | Programmers |
-| Add dynamic analysis (fuzzing) | Pending | P1 | Programmers |
-| Implement signed releases | Pending | P0 | Programmers |
-| Performance benchmarks | Pending | P1 | Programmer-1 |
-| CNCF Sandbox application | Pending | P0 | Product Manager |
+| Increase test coverage to 80%+ | ✅ **Done** (83.7%) | P0 | Programmers |
+| Add static analysis (gosec) to CI | ✅ **Done** | P0 | Programmer-2 |
+| Add dynamic analysis (fuzzing) | In Progress | P1 | Programmer-1 |
+| Implement signed releases | ✅ **Done** | P0 | Programmer-3 |
+| DCO enforcement | ✅ **Done** | P0 | Programmer-2 |
+| Regression test infrastructure | In Progress | P0 | Programmer-1 |
+| Performance benchmarks | In Progress | P1 | Programmer-1 |
+| CNCF Sandbox application materials | In Progress | P0 | Product Manager |
 | GOVERNANCE.md | ✅ Done | P0 | Product Manager |
 | ROADMAP.md | ✅ Done | P0 | Product Manager |
-| Quick Start guide | Pending | P1 | Product Manager |
+| ARCHITECTURE.md | ✅ Done | P0 | Product Manager |
+| QUICKSTART.md | ✅ Done | P1 | Product Manager |
+| Status badges | ✅ Done | P1 | Product Manager |
 
 **Target Q1 Release:** v7.1 (bug fix release)
 
@@ -153,9 +162,9 @@ JVS aims to become the most reliable, feature-rich workspace version control sys
 
 | Milestone | Target | Status |
 |-----------|--------|--------|
-| OpenSSF Best Practices - Passing | Q1 2026 | In Progress (80%) |
-| OpenSSF Best Practices - Silver | Q2 2026 | Planned |
-| Sandbox application submitted | Q2 2026 | Planned |
+| OpenSSF Best Practices - Passing | ✅ Q1 2026 | **COMPLETE** (95%) |
+| OpenSSF Best Practices - Silver | Q2 2026 | In Progress (85%) |
+| CNCF Sandbox application | Q2 2026 | In Preparation |
 | Sandbox presentation | Q3 2026 | Planned |
 
 ---

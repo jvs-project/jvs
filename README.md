@@ -59,6 +59,7 @@ jvs history
 | `jvs init <name>` | Initialize a new repository |
 | `jvs snapshot [note] [--tag <tag>]` | Create a snapshot |
 | `jvs history [--tag <tag>] [--grep <pattern>]` | Show snapshot history |
+| `jvs diff [<from> [<to>]]` | Show differences between snapshots |
 | `jvs restore <id>` | Restore worktree to snapshot (inplace) |
 | `jvs restore HEAD` | Return to latest state |
 | `jvs worktree fork [name]` | Fork from current position |
