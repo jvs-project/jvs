@@ -8,6 +8,7 @@ import (
 
 	"github.com/jvs-project/jvs/internal/snapshot"
 	"github.com/jvs-project/jvs/internal/worktree"
+	"github.com/jvs-project/jvs/pkg/config"
 	"github.com/jvs-project/jvs/pkg/model"
 	"github.com/jvs-project/jvs/pkg/pathutil"
 )
@@ -61,6 +62,9 @@ to create a new worktree from the current position first.`,
 			note = args[0]
 		}
 
+		// Load config for default tags
+		jvsCfg, _ := config.Load(r.Root)
+
 		// Validate tags
 		for _, tag := range snapshotTags {
 			if err := pathutil.ValidateTag(tag); err != nil {
@@ -69,15 +73,36 @@ to create a new worktree from the current position first.`,
 			}
 		}
 
-		creator := snapshot.NewCreator(r.Root, detectEngine(r.Root))
+		// Combine command-line tags with default tags from config
+		allTags := snapshotTags
+		if defaultTags := jvsCfg.GetDefaultTags(); len(defaultTags) > 0 {
+			// Add default tags that aren't already specified
+			tagMap := make(map[string]bool)
+			for _, tag := range allTags {
+				tagMap[tag] = true
+			}
+			for _, defaultTag := range defaultTags {
+				if !tagMap[defaultTag] {
+					allTags = append(allTags, defaultTag)
+				}
+			}
+		}
+
+		// Detect engine from config or auto-detect
+		engine := detectEngine(r.Root)
+		if defaultEngine := jvsCfg.GetDefaultEngine(); defaultEngine != "" {
+			engine = defaultEngine
+		}
+
+		creator := snapshot.NewCreator(r.Root, engine)
 		var desc *model.Descriptor
 
 		if len(snapshotPaths) > 0 {
 			// Partial snapshot
-			desc, err = creator.CreatePartial(wtName, note, snapshotTags, snapshotPaths)
+			desc, err = creator.CreatePartial(wtName, note, allTags, snapshotPaths)
 		} else {
 			// Full snapshot
-			desc, err = creator.Create(wtName, note, snapshotTags)
+			desc, err = creator.Create(wtName, note, allTags)
 		}
 
 		if err != nil {

@@ -32,7 +32,7 @@ var configShowCmd = &cobra.Command{
 	Short: "Show current configuration",
 	Long:  "Show the current JVS configuration from .jvs/config.yaml.",
 	Run: func(cmd *cobra.Command, args []string) {
-		r, _ := requireRepo()
+		r := requireRepo()
 		cfg, err := config.Load(r.Root)
 		if err != nil {
 			fmtErr("load config: %v", err)
@@ -117,7 +117,7 @@ Available keys:
   progress_enabled  - Enable progress bars (true, false)`,
 	Args: cobra.ExactArgs(2),
 	Run: func(cmd *cobra.Command, args []string) {
-		r, _ := requireRepo()
+		r := requireRepo()
 		cfg, err := config.Load(r.Root)
 		if err != nil {
 			fmtErr("load config: %v", err)
@@ -158,7 +158,7 @@ Available keys:
   progress_enabled  - Progress bar setting`,
 	Args: cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		r, _ := requireRepo()
+		r := requireRepo()
 		cfg, err := config.Load(r.Root)
 		if err != nil {
 			fmtErr("load config: %v", err)

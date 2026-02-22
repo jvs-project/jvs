@@ -250,6 +250,60 @@ Partial snapshots will show `"partial_paths": ["path1", "path2"]` in the output.
 
 ---
 
+### How do I configure JVS defaults?
+
+JVS supports configuration via `.jvs/config.yaml` for repository-specific settings. This allows you to set defaults like:
+
+- **Default engine** - Avoid specifying `--engine` every time
+- **Default tags** - Automatically add tags to every snapshot
+- **Output format** - Always use JSON output if preferred
+- **Progress bars** - Enable/disable progress bar display
+
+**Show current configuration:**
+```bash
+jvs config show
+```
+
+**Set a configuration value:**
+```bash
+# Set default engine
+jvs config set default_engine juicefs-clone
+
+# Set default tags (YAML list format)
+jvs config set default_tags '["dev", "experimental"]'
+
+# Set JSON output by default
+jvs config set output_format json
+
+# Disable progress bars
+jvs config set progress_enabled false
+```
+
+**Get a single value:**
+```bash
+jvs config get default_engine
+jvs config get default_tags
+```
+
+**Example config.yaml:**
+```yaml
+# .jvs/config.yaml
+default_engine: juicefs-clone
+default_tags:
+  - auto
+  - v1.0
+output_format: text
+progress_enabled: true
+```
+
+**Important notes:**
+- Config is per-repository (stored in `.jvs/config.yaml`)
+- Command-line flags override config values
+- Default tags are combined with tags specified via `--tag`
+- If the config file doesn't exist, JVS uses sensible defaults
+
+---
+
 ## Common Misconceptions
 
 ### Misconception: "JVS is a Git replacement"
