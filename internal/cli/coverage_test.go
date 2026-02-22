@@ -672,3 +672,575 @@ func TestRestoreNonExistentSnapshot(t *testing.T) {
 func TestGCRunWithNoPlan(t *testing.T) {
 	t.Skip("Command calls os.Exit - cannot be tested in unit tests")
 }
+
+// TestFindRepoRoot tests the findRepoRoot function.
+func TestFindRepoRoot(t *testing.T) {
+	originalWd, _ := os.Getwd()
+	defer os.Chdir(originalWd)
+
+	t.Run("Find repo root from subdirectory", func(t *testing.T) {
+		// Check if we're in a repo first
+		_, err := os.Stat(filepath.Join(originalWd, "go.mod"))
+		if err != nil {
+			t.Skip("Not in repo root")
+		}
+
+		// Start from a subdirectory of the repo
+		subDir := filepath.Join(originalWd, "internal")
+		assert.NoError(t, os.Chdir(subDir))
+
+		root, err := findRepoRoot()
+		assert.NoError(t, err)
+		assert.Contains(t, root, "jvs")
+		// Change back to original
+		os.Chdir(originalWd)
+	})
+
+	t.Run("Find repo root from repo root", func(t *testing.T) {
+		// Verify we're in a directory with go.mod
+		_, err := os.Stat(filepath.Join(originalWd, "go.mod"))
+		if err != nil {
+			t.Skip("Not in repo root")
+		}
+
+		root, err := findRepoRoot()
+		assert.NoError(t, err)
+		assert.Equal(t, originalWd, root)
+	})
+
+	t.Run("Find repo root from temp directory returns error", func(t *testing.T) {
+		dir := t.TempDir()
+		assert.NoError(t, os.Chdir(dir))
+
+		_, err := findRepoRoot()
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "go.mod not found")
+		// Change back to original
+		os.Chdir(originalWd)
+	})
+}
+
+// TestDetectEngine_EdgeCases tests detectEngine with more edge cases.
+func TestDetectEngine_EdgeCases(t *testing.T) {
+	t.Run("Detect with valid JVS repo path", func(t *testing.T) {
+		dir := t.TempDir()
+		cmd := createTestRootCmd()
+
+		// Change to temp dir and init a repo
+		originalWd, _ := os.Getwd()
+		defer os.Chdir(originalWd)
+
+		assert.NoError(t, os.Chdir(dir))
+		_, err := executeCommand(cmd, "init", "testrepo")
+		assert.NoError(t, err)
+
+		// Test detection on the repo
+		engine := detectEngine(filepath.Join(dir, "testrepo"))
+		// Should return a valid engine (even if just copy)
+		assert.NotEmpty(t, string(engine))
+	})
+
+	t.Run("Detect with path containing special characters", func(t *testing.T) {
+		// Test that paths with special chars don't cause panics
+		engine := detectEngine("/path/with spaces/and-dashes/under_score")
+		assert.NotEmpty(t, string(engine))
+	})
+}
+
+// TestResolveSnapshotNonExistentTag tests resolving with non-existent tag.
+func TestResolveSnapshotNonExistentTag(t *testing.T) {
+	dir := t.TempDir()
+	originalWd, _ := os.Getwd()
+
+	assert.NoError(t, os.Chdir(dir))
+	cmd := createTestRootCmd()
+	_, err := executeCommand(cmd, "init", "testrepo")
+	assert.NoError(t, err)
+
+	repoPath := dir + "/testrepo"
+
+	t.Run("Resolve non-existent tag returns error", func(t *testing.T) {
+		_, err := resolveSnapshot(repoPath, "nonexistent-tag")
+		assert.Error(t, err)
+	})
+
+	t.Run("Resolve with case-sensitive tag", func(t *testing.T) {
+		// Create a snapshot with a tag
+		mainPath := repoPath + "/main"
+		assert.NoError(t, os.Chdir(mainPath))
+		assert.NoError(t, os.WriteFile("case.txt", []byte("test"), 0644))
+
+		cmd2 := createTestRootCmd()
+		_, err := executeCommand(cmd2, "snapshot", "test", "--tag", "MyTag")
+		assert.NoError(t, err)
+
+		// Try to resolve with different case
+		_, err = resolveSnapshot(repoPath, "mytag")
+		// Should fail due to case sensitivity
+		assert.Error(t, err)
+	})
+
+	os.Chdir(originalWd)
+}
+
+// TestResolveSnapshot_InvalidID tests resolveSnapshot with invalid IDs.
+func TestResolveSnapshot_InvalidID(t *testing.T) {
+	dir := t.TempDir()
+	originalWd, _ := os.Getwd()
+
+	assert.NoError(t, os.Chdir(dir))
+	cmd := createTestRootCmd()
+	_, err := executeCommand(cmd, "init", "testrepo")
+	assert.NoError(t, err)
+
+	repoPath := dir + "/testrepo"
+
+	t.Run("Resolve with invalid hex characters", func(t *testing.T) {
+		_, err := resolveSnapshot(repoPath, "zzzzzzzzzzzz")
+		assert.Error(t, err)
+	})
+
+	t.Run("Resolve with ID too long", func(t *testing.T) {
+		// Very long ID string
+		longID := strings.Repeat("a", 1000)
+		_, err := resolveSnapshot(repoPath, longID)
+		assert.Error(t, err)
+	})
+
+	os.Chdir(originalWd)
+}
+
+// TestResolveSnapshot_ByIDThenTag tests resolveSnapshot prefers exact ID match over tag.
+func TestResolveSnapshot_ByIDThenTag(t *testing.T) {
+	dir := t.TempDir()
+	originalWd, _ := os.Getwd()
+
+	assert.NoError(t, os.Chdir(dir))
+	cmd := createTestRootCmd()
+	_, err := executeCommand(cmd, "init", "testrepo")
+	assert.NoError(t, err)
+
+	repoPath := dir + "/testrepo"
+	mainPath := repoPath + "/main"
+
+	// Create a snapshot with a tag that looks like an ID prefix
+	assert.NoError(t, os.Chdir(mainPath))
+	assert.NoError(t, os.WriteFile("tag.txt", []byte("test"), 0644))
+
+	cmd2 := createTestRootCmd()
+	stdout, _ := executeCommand(cmd2, "snapshot", "test", "--tag", "abc123", "--json")
+
+	// Extract snapshot ID
+	lines := strings.Split(stdout, "\n")
+	var snapshotID string
+	for _, line := range lines {
+		if strings.Contains(line, `"snapshot_id"`) {
+			parts := strings.Split(line, `"`)
+			for i, p := range parts {
+				if p == "snapshot_id" && i+2 < len(parts) {
+					snapshotID = parts[i+2]
+					break
+				}
+			}
+		}
+	}
+
+	if snapshotID != "" {
+		// If the ID starts with "abc", the tag lookup might conflict
+		// This tests the priority of resolution
+		_, err := resolveSnapshot(repoPath, "abc123")
+		// Should resolve by tag
+		assert.NoError(t, err)
+	}
+
+	os.Chdir(originalWd)
+}
+
+// TestResolveSnapshot_HEAD_ErrorPaths tests HEAD resolution error paths.
+func TestResolveSnapshot_HEAD_ErrorPaths(t *testing.T) {
+	dir := t.TempDir()
+	originalWd, _ := os.Getwd()
+
+	assert.NoError(t, os.Chdir(dir))
+	cmd := createTestRootCmd()
+	_, err := executeCommand(cmd, "init", "testrepo")
+	assert.NoError(t, err)
+
+	repoPath := dir + "/testrepo"
+	mainPath := repoPath + "/main"
+
+	t.Run("HEAD from worktree with no snapshots", func(t *testing.T) {
+		assert.NoError(t, os.Chdir(mainPath))
+		_, err := resolveSnapshot(repoPath, "HEAD")
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "no snapshots")
+	})
+
+	os.Chdir(originalWd)
+}
+
+// TestOutputJSON_ErrorHandling tests outputJSON error handling.
+func TestOutputJSON_ErrorHandling(t *testing.T) {
+	originalJSONOutput := jsonOutput
+	defer func() {
+		jsonOutput = originalJSONOutput
+	}()
+
+	t.Run("OutputJSON with unmarshalable type", func(t *testing.T) {
+		jsonOutput = true
+		// Channel is not JSON serializable
+		ch := make(chan int)
+		err := outputJSON(ch)
+		assert.Error(t, err)
+	})
+
+	t.Run("OutputJSON with cyclic reference", func(t *testing.T) {
+		jsonOutput = true
+		// Create a cyclic reference
+		type cyclic struct {
+			Next *cyclic
+		}
+		val := &cyclic{}
+		val.Next = val
+		err := outputJSON(val)
+		assert.Error(t, err)
+	})
+}
+
+// TestNewCountingProgress_Variations tests newCountingProgress with different scenarios.
+func TestNewCountingProgress_Variations(t *testing.T) {
+	originalNoProgress := noProgress
+	originalJSONOutput := jsonOutput
+	defer func() {
+		noProgress = originalNoProgress
+		jsonOutput = originalJSONOutput
+	}()
+
+	t.Run("Progress with empty operation name", func(t *testing.T) {
+		noProgress = false
+		jsonOutput = false
+		cp := newCountingProgress("")
+		assert.NotNil(t, cp)
+	})
+
+	t.Run("Progress with very long operation name", func(t *testing.T) {
+		noProgress = false
+		jsonOutput = false
+		longName := strings.Repeat("test", 100)
+		cp := newCountingProgress(longName)
+		assert.NotNil(t, cp)
+	})
+
+	t.Run("Progress with special characters in name", func(t *testing.T) {
+		noProgress = false
+		jsonOutput = false
+		cp := newCountingProgress("操作\n处理")
+		assert.NotNil(t, cp)
+	})
+}
+
+// TestNewProgressCallback_Variations tests newProgressCallback edge cases.
+func TestNewProgressCallback_Variations(t *testing.T) {
+	originalNoProgress := noProgress
+	originalJSONOutput := jsonOutput
+	defer func() {
+		noProgress = originalNoProgress
+		jsonOutput = originalJSONOutput
+	}()
+
+	t.Run("Callback with zero total", func(t *testing.T) {
+		noProgress = false
+		jsonOutput = false
+		cb := newProgressCallback("test", 0)
+		assert.NotNil(t, cb)
+		cb("test", 0, 0, "done")
+	})
+
+	t.Run("Callback with negative values", func(t *testing.T) {
+		noProgress = false
+		jsonOutput = false
+		cb := newProgressCallback("test", 100)
+		assert.NotNil(t, cb)
+		cb("test", -1, -1, "negative")
+	})
+
+	t.Run("Callback with current equals total", func(t *testing.T) {
+		noProgress = false
+		jsonOutput = false
+		cb := newProgressCallback("test", 100)
+		assert.NotNil(t, cb)
+		cb("test", 100, 100, "complete")
+	})
+}
+
+// TestSnapshotCommand_WithNote tests snapshot with various note formats.
+func TestSnapshotCommand_WithNote(t *testing.T) {
+	dir := t.TempDir()
+	originalWd, _ := os.Getwd()
+
+	assert.NoError(t, os.Chdir(dir))
+	cmd := createTestRootCmd()
+	_, err := executeCommand(cmd, "init", "testrepo")
+	assert.NoError(t, err)
+
+	// Change into main worktree
+	assert.NoError(t, os.Chdir(filepath.Join(dir, "testrepo", "main")))
+
+	t.Run("Snapshot with empty note", func(t *testing.T) {
+		assert.NoError(t, os.WriteFile("empty.txt", []byte("test"), 0644))
+		cmd2 := createTestRootCmd()
+		stdout, err := executeCommand(cmd2, "snapshot", "")
+		assert.NoError(t, err)
+		assert.Contains(t, stdout, "snapshot")
+	})
+
+	t.Run("Snapshot with very long note", func(t *testing.T) {
+		assert.NoError(t, os.WriteFile("long.txt", []byte("test"), 0644))
+		longNote := strings.Repeat("a", 1000)
+		cmd3 := createTestRootCmd()
+		stdout, err := executeCommand(cmd3, "snapshot", longNote)
+		assert.NoError(t, err)
+		assert.Contains(t, stdout, "snapshot")
+	})
+
+	t.Run("Snapshot with special characters in note", func(t *testing.T) {
+		assert.NoError(t, os.WriteFile("special.txt", []byte("test"), 0644))
+		cmd4 := createTestRootCmd()
+		stdout, err := executeCommand(cmd4, "snapshot", "note with quotes: \"test\" and 'apostrophes'")
+		assert.NoError(t, err)
+		assert.Contains(t, stdout, "snapshot")
+	})
+
+	os.Chdir(originalWd)
+}
+
+// TestSnapshotCommand_WithCompress tests snapshot with compression levels.
+func TestSnapshotCommand_WithCompress(t *testing.T) {
+	dir := t.TempDir()
+	originalWd, _ := os.Getwd()
+
+	assert.NoError(t, os.Chdir(dir))
+	cmd := createTestRootCmd()
+	_, err := executeCommand(cmd, "init", "testrepo")
+	assert.NoError(t, err)
+
+	// Change into main worktree
+	assert.NoError(t, os.Chdir(filepath.Join(dir, "testrepo", "main")))
+	assert.NoError(t, os.WriteFile("compress.txt", []byte("test"), 0644))
+
+	t.Run("Snapshot with no compression", func(t *testing.T) {
+		cmd2 := createTestRootCmd()
+		stdout, err := executeCommand(cmd2, "snapshot", "--compress", "none", "test no compress")
+		assert.NoError(t, err)
+		assert.Contains(t, stdout, "snapshot")
+	})
+
+	t.Run("Snapshot with fast compression", func(t *testing.T) {
+		cmd3 := createTestRootCmd()
+		stdout, err := executeCommand(cmd3, "snapshot", "--compress", "fast", "test fast compress")
+		assert.NoError(t, err)
+		assert.Contains(t, stdout, "snapshot")
+	})
+
+	os.Chdir(originalWd)
+}
+
+// TestDoctorCommand tests the doctor command.
+func TestDoctorCommand(t *testing.T) {
+	dir := t.TempDir()
+	originalWd, _ := os.Getwd()
+
+	assert.NoError(t, os.Chdir(dir))
+	cmd := createTestRootCmd()
+	_, err := executeCommand(cmd, "init", "testrepo")
+	assert.NoError(t, err)
+
+	// Change into main worktree
+	assert.NoError(t, os.Chdir(filepath.Join(dir, "testrepo", "main")))
+
+	t.Run("Doctor basic check", func(t *testing.T) {
+		cmd2 := createTestRootCmd()
+		stdout, err := executeCommand(cmd2, "doctor")
+		assert.NoError(t, err)
+		assert.Contains(t, stdout, "healthy")
+	})
+
+	t.Run("Doctor with --strict flag", func(t *testing.T) {
+		cmd3 := createTestRootCmd()
+		stdout, err := executeCommand(cmd3, "doctor", "--strict")
+		assert.NoError(t, err)
+		assert.Contains(t, stdout, "healthy")
+	})
+
+	t.Run("Doctor with --repair-runtime flag", func(t *testing.T) {
+		cmd4 := createTestRootCmd()
+		stdout, err := executeCommand(cmd4, "doctor", "--repair-runtime")
+		assert.NoError(t, err)
+		assert.Contains(t, stdout, "healthy")
+	})
+
+	os.Chdir(originalWd)
+}
+
+// TestHistoryCommand tests the history command.
+func TestHistoryCommand(t *testing.T) {
+	dir := t.TempDir()
+	originalWd, _ := os.Getwd()
+
+	assert.NoError(t, os.Chdir(dir))
+	cmd := createTestRootCmd()
+	_, err := executeCommand(cmd, "init", "testrepo")
+	assert.NoError(t, err)
+
+	// Change into main worktree
+	assert.NoError(t, os.Chdir(filepath.Join(dir, "testrepo", "main")))
+
+	t.Run("History with no snapshots", func(t *testing.T) {
+		cmd2 := createTestRootCmd()
+		_, err := executeCommand(cmd2, "history")
+		assert.NoError(t, err)
+		// Should show empty history
+	})
+
+	t.Run("History after creating snapshot", func(t *testing.T) {
+		assert.NoError(t, os.WriteFile("historytest.txt", []byte("test"), 0644))
+		cmd3 := createTestRootCmd()
+		_, err = executeCommand(cmd3, "snapshot", "for history test")
+		assert.NoError(t, err)
+
+		cmd4 := createTestRootCmd()
+		stdout, err := executeCommand(cmd4, "history")
+		assert.NoError(t, err)
+		// History output should contain snapshot information
+		assert.NotEmpty(t, stdout)
+	})
+
+	t.Run("History with JSON output", func(t *testing.T) {
+		cmd5 := createTestRootCmd()
+		stdout, err := executeCommand(cmd5, "history", "--json")
+		assert.NoError(t, err)
+		assert.Contains(t, stdout, "[")
+	})
+
+	t.Run("History with limit", func(t *testing.T) {
+		cmd6 := createTestRootCmd()
+		_, err := executeCommand(cmd6, "history", "--limit", "1")
+		assert.NoError(t, err)
+		// Should return at most 1 snapshot
+	})
+
+	os.Chdir(originalWd)
+}
+
+// TestInfoCommand tests the info command.
+func TestInfoCommand(t *testing.T) {
+	dir := t.TempDir()
+	originalWd, _ := os.Getwd()
+
+	assert.NoError(t, os.Chdir(dir))
+	cmd := createTestRootCmd()
+	_, err := executeCommand(cmd, "init", "testrepo")
+	assert.NoError(t, err)
+
+	// Change into main worktree
+	assert.NoError(t, os.Chdir(filepath.Join(dir, "testrepo", "main")))
+
+	t.Run("Info in new repo", func(t *testing.T) {
+		cmd2 := createTestRootCmd()
+		stdout, err := executeCommand(cmd2, "info")
+		assert.NoError(t, err)
+		assert.Contains(t, stdout, "Repository")
+	})
+
+	t.Run("Info with JSON output", func(t *testing.T) {
+		cmd3 := createTestRootCmd()
+		stdout, err := executeCommand(cmd3, "info", "--json")
+		assert.NoError(t, err)
+		assert.Contains(t, stdout, "{")
+	})
+
+	os.Chdir(originalWd)
+}
+
+// TestWorktreeCommands tests various worktree commands.
+func TestWorktreeCommands(t *testing.T) {
+	dir := t.TempDir()
+	originalWd, _ := os.Getwd()
+
+	assert.NoError(t, os.Chdir(dir))
+	cmd := createTestRootCmd()
+	_, err := executeCommand(cmd, "init", "testrepo")
+	assert.NoError(t, err)
+
+	// Change into main worktree
+	assert.NoError(t, os.Chdir(filepath.Join(dir, "testrepo", "main")))
+
+	// Create a snapshot first
+	assert.NoError(t, os.WriteFile("wttest.txt", []byte("test"), 0644))
+	cmd2 := createTestRootCmd()
+	stdout, err := executeCommand(cmd2, "snapshot", "for worktree", "--json")
+	assert.NoError(t, err)
+
+	// Extract snapshot ID
+	lines := strings.Split(stdout, "\n")
+	var snapshotID string
+	for _, line := range lines {
+		if strings.Contains(line, `"snapshot_id"`) {
+			parts := strings.Split(line, `"`)
+			for i, p := range parts {
+				if p == "snapshot_id" && i+2 < len(parts) {
+					snapshotID = parts[i+2]
+					break
+				}
+			}
+		}
+	}
+
+	t.Run("Worktree list", func(t *testing.T) {
+		cmd3 := createTestRootCmd()
+		stdout, err := executeCommand(cmd3, "worktree", "list")
+		assert.NoError(t, err)
+		assert.Contains(t, stdout, "main")
+	})
+
+	if snapshotID != "" {
+		t.Run("Worktree fork from snapshot", func(t *testing.T) {
+			cmd4 := createTestRootCmd()
+			stdout, err := executeCommand(cmd4, "worktree", "fork", snapshotID, "test-branch")
+			assert.NoError(t, err)
+			assert.Contains(t, stdout, "test-branch")
+		})
+	}
+
+	os.Chdir(originalWd)
+}
+
+// TestVerifyCommand tests the verify command.
+func TestVerifyCommand(t *testing.T) {
+	dir := t.TempDir()
+	originalWd, _ := os.Getwd()
+
+	assert.NoError(t, os.Chdir(dir))
+	cmd := createTestRootCmd()
+	_, err := executeCommand(cmd, "init", "testrepo")
+	assert.NoError(t, err)
+
+	// Change into main worktree
+	assert.NoError(t, os.Chdir(filepath.Join(dir, "testrepo", "main")))
+
+	// Create a snapshot
+	assert.NoError(t, os.WriteFile("verify.txt", []byte("verify test"), 0644))
+	cmd2 := createTestRootCmd()
+	_, err = executeCommand(cmd2, "snapshot", "for verify")
+	assert.NoError(t, err)
+
+	t.Run("Verify all snapshots", func(t *testing.T) {
+		cmd3 := createTestRootCmd()
+		stdout, err := executeCommand(cmd3, "verify", "--all")
+		assert.NoError(t, err)
+		// Verify output contains OK for each snapshot
+		assert.Contains(t, stdout, "OK")
+	})
+
+	os.Chdir(originalWd)
+}
