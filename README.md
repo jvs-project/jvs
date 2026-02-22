@@ -30,14 +30,18 @@ JVS versions full workspaces as snapshots and provides navigable, verifiable, ta
 ### Docker (Recommended for isolated environments)
 
 ```bash
+# From Docker Hub
+docker pull jvsproject/jvs:latest
+
+# From GitHub Container Registry
 docker pull ghcr.io/jvs-project/jvs:latest
 
 # Run JVS commands
-docker run --rm -v "$(pwd)/workspace:/workspace" ghcr.io/jvs-project/jvs init myrepo
-docker run --rm -v "$(pwd)/workspace:/workspace" ghcr.io/jvs-project/jvs snapshot "initial"
+docker run --rm -v "$(pwd)/workspace:/workspace" jvsproject/jvs init myrepo
+docker run --rm -v "$(pwd)/workspace:/workspace" jvsproject/jvs snapshot "initial"
 ```
 
-See [Docker Guide](docs/DOCKER.md) for details.
+See [Docker Guide](docs/DOCKER.md) for details on JuiceFS integration, FUSE support, and multi-platform usage.
 
 ### Homebrew (macOS & Linux)
 

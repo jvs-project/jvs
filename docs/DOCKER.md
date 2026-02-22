@@ -1,23 +1,25 @@
 # Docker Image for JVS
 
-This document describes how to use the JVS Docker image.
+This document describes how to use the JVS Docker image with JuiceFS support.
 
 ## Quick Start
 
 ### Using Docker Run
 
 ```bash
-# Pull the latest image
+# Pull from Docker Hub (or GHCR)
+docker pull jvsproject/jvs:latest
+# or
 docker pull ghcr.io/jvs-project/jvs:latest
 
 # Initialize a new repository
-docker run --rm -v "$(pwd)/workspace:/workspace" ghcr.io/jvs-project/jvs init my-repo
+docker run --rm -v "$(pwd)/workspace:/workspace" jvsproject/jvs init my-repo
 
 # Create a snapshot
-docker run --rm -v "$(pwd)/workspace:/workspace" ghcr.io/jvs-project/jvs snapshot "initial"
+docker run --rm -v "$(pwd)/workspace:/workspace" jvsproject/jvs snapshot "initial"
 
 # List snapshots
-docker run --rm -v "$(pwd)/workspace:/workspace" ghcr.io/jvs-project/jvs history
+docker run --rm -v "$(pwd)/workspace:/workspace" jvsproject/jvs history
 ```
 
 ### Using Docker Compose
@@ -34,18 +36,34 @@ docker-compose run jvs snapshot "checkpoint"
 docker-compose down
 ```
 
-## Image Tags
+## Image Sources
 
+JVS Docker images are published to multiple registries:
+
+### Docker Hub
+- `jvsproject/jvs:latest` - Latest stable release
+- `jvsproject/jvs:v1.0.0` - Versioned releases
+- `jvsproject/jvs:v1` - Major version
+
+### GitHub Container Registry
 - `ghcr.io/jvs-project/jvs:latest` - Latest stable release
 - `ghcr.io/jvs-project/jvs:v1.0.0` - Versioned releases
 - `ghcr.io/jvs-project/jvs:v1` - Major version
-- `ghcr.io/jvs-project/jvs:main` - Latest main branch build
 
 ## Platforms
 
 The Docker image is built for multiple platforms:
 - `linux/amd64` - x86_64 / AMD64
 - `linux/arm64` - ARM64 / aarch64
+
+## Features
+
+The JVS Docker image includes:
+- **JVS CLI** - Full JVS functionality
+- **JuiceFS Client** - Pre-installed `juicefs` binary
+- **FUSE Support** - For FUSE-based filesystems
+- **Bash Completion** - Tab completion for JVS commands
+- **Shell Tools** - bash, coreutils for scripting
 
 ## Volume Mounts
 
@@ -119,17 +137,58 @@ docker run --rm -v "$(pwd):/workspace" \
 
 ## JuiceFS Integration
 
-For JuiceFS integration, you need to:
+The JVS Docker image includes the JuiceFS client and FUSE support for working with JuiceFS-mounted filesystems.
 
-1. Mount JuiceFS in the container
-2. Set the appropriate engine
+### Running with FUSE Privileges
+
+For JuiceFS operations requiring FUSE, run with elevated privileges:
 
 ```bash
 docker run --rm \
-    -v "$(pwd):/workspace" \
-    -v /path/to/juicefs/mount:/mnt/juicefs:ro \
+    --privileged \
+    --cap-add SYS_ADMIN \
+    --device /dev/fuse \
+    -v "$(pwd)/workspace:/workspace" \
     -e JVS_ENGINE=juicefs-clone \
-    ghcr.io/jvs-project/jvs init myproject
+    jvsproject/jvs init myproject
+```
+
+### Using Docker Compose with JuiceFS
+
+The included `docker-compose.yml` has a `jvs-juicefs` service configured for FUSE:
+
+```bash
+# Use the JuiceFS-enabled service
+docker-compose run jvs-juicefs init myproject
+```
+
+### Mounting JuiceFS Inside Container
+
+You can mount JuiceFS from inside the container:
+
+```bash
+docker run --rm \
+    --privileged \
+    --cap-add SYS_ADMIN \
+    --device /dev/fuse \
+    -v "$(pwd)/workspace:/workspace" \
+    -e JUICEFS_META=redis://your-redis:6379/1 \
+    jvsproject/jvs bash -c "
+        juicefs mount $JUICEFS_META /mnt/juicefs -d &&
+        cd /mnt/juicefs &&
+        jvs init myproject
+    "
+```
+
+### Using Pre-Mounted JuiceFS
+
+If JuiceFS is already mounted on the host:
+
+```bash
+docker run --rm \
+    -v /path/to/juicefs/mount:/workspace \
+    -e JVS_ENGINE=juicefs-clone \
+    jvsproject/jvs snapshot "checkpoint"
 ```
 
 ## Building Locally
