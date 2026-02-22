@@ -25,12 +25,7 @@ type Restorer struct {
 
 // NewRestorer creates a new restorer.
 func NewRestorer(repoRoot string, engineType model.EngineType) *Restorer {
-	var eng engine.Engine
-	if engineType == model.EngineCopy {
-		eng = engine.NewCopyEngine()
-	} else {
-		eng = engine.NewCopyEngine() // fallback
-	}
+	eng := engine.NewEngine(engineType)
 
 	auditPath := filepath.Join(repoRoot, ".jvs", "audit", "audit.jsonl")
 	return &Restorer{

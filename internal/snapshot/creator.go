@@ -26,15 +26,7 @@ type Creator struct {
 
 // NewCreator creates a new snapshot creator.
 func NewCreator(repoRoot string, engineType model.EngineType) *Creator {
-	var eng engine.Engine
-	switch engineType {
-	case model.EngineJuiceFSClone:
-		eng = engine.NewJuiceFSEngine()
-	case model.EngineReflinkCopy:
-		eng = engine.NewReflinkEngine()
-	default:
-		eng = engine.NewCopyEngine()
-	}
+	eng := engine.NewEngine(engineType)
 
 	auditPath := filepath.Join(repoRoot, ".jvs", "audit", "audit.jsonl")
 	return &Creator{
@@ -119,9 +111,11 @@ func (c *Creator) Create(worktreeName, note string, tags []string) (*model.Descr
 
 	// Step 9: Write .READY marker
 	readyMarker := &model.ReadyMarker{
-		SnapshotID:  snapshotID,
-		CompletedAt: time.Now().UTC(),
-		PayloadHash: payloadHash,
+		SnapshotID:         snapshotID,
+		CompletedAt:        time.Now().UTC(),
+		PayloadHash:        payloadHash,
+		Engine:             c.engineType,
+		DescriptorChecksum: checksum,
 	}
 	readyPath := filepath.Join(snapshotDir, ".READY")
 	if err := c.writeReadyMarker(readyPath, readyMarker); err != nil {

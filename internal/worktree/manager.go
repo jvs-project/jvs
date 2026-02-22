@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/jvs-project/jvs/internal/audit"
 	"github.com/jvs-project/jvs/internal/repo"
 	"github.com/jvs-project/jvs/pkg/model"
 	"github.com/jvs-project/jvs/pkg/pathutil"
@@ -53,6 +54,54 @@ func (m *Manager) Create(name string, baseSnapshotID *model.SnapshotID) (*model.
 	}
 	if baseSnapshotID != nil {
 		cfg.HeadSnapshotID = *baseSnapshotID
+	}
+
+	if err := repo.WriteWorktreeConfig(m.repoRoot, name, cfg); err != nil {
+		os.RemoveAll(payloadPath)
+		return nil, fmt.Errorf("write config: %w", err)
+	}
+
+	return cfg, nil
+}
+
+// CreateFromSnapshot creates a new worktree with content cloned from a snapshot.
+// This is similar to Fork but uses "create" semantics (for the --from flag).
+func (m *Manager) CreateFromSnapshot(name string, snapshotID model.SnapshotID, cloneFunc func(src, dst string) error) (*model.WorktreeConfig, error) {
+	if err := pathutil.ValidateName(name); err != nil {
+		return nil, err
+	}
+
+	// Check if already exists
+	configPath := repo.WorktreeConfigPath(m.repoRoot, name)
+	if _, err := os.Stat(configPath); err == nil {
+		return nil, fmt.Errorf("worktree %s already exists", name)
+	}
+
+	// Create payload directory
+	payloadPath := repo.WorktreePayloadPath(m.repoRoot, name)
+	if err := os.MkdirAll(payloadPath, 0755); err != nil {
+		return nil, fmt.Errorf("create payload directory: %w", err)
+	}
+
+	// Clone snapshot content to worktree
+	snapshotDir := filepath.Join(m.repoRoot, ".jvs", "snapshots", string(snapshotID))
+	if err := cloneFunc(snapshotDir, payloadPath); err != nil {
+		os.RemoveAll(payloadPath)
+		return nil, fmt.Errorf("clone snapshot content: %w", err)
+	}
+
+	// Create config directory
+	configDir := filepath.Dir(configPath)
+	if err := os.MkdirAll(configDir, 0755); err != nil {
+		os.RemoveAll(payloadPath)
+		return nil, fmt.Errorf("create config directory: %w", err)
+	}
+
+	// Create config
+	cfg := &model.WorktreeConfig{
+		Name:           name,
+		CreatedAt:      time.Now().UTC(),
+		BaseSnapshotID: snapshotID,
 	}
 
 	if err := repo.WriteWorktreeConfig(m.repoRoot, name, cfg); err != nil {
@@ -138,6 +187,9 @@ func (m *Manager) Remove(name string) error {
 		return errors.New("cannot remove main worktree")
 	}
 
+	// Get config before removal for audit logging
+	cfg, _ := repo.LoadWorktreeConfig(m.repoRoot, name)
+
 	// Remove payload directory
 	payloadPath := repo.WorktreePayloadPath(m.repoRoot, name)
 	if err := os.RemoveAll(payloadPath); err != nil && !os.IsNotExist(err) {
@@ -148,6 +200,15 @@ func (m *Manager) Remove(name string) error {
 	configDir := filepath.Join(m.repoRoot, ".jvs", "worktrees", name)
 	if err := os.RemoveAll(configDir); err != nil {
 		return fmt.Errorf("remove config: %w", err)
+	}
+
+	// Audit log the removal
+	if cfg != nil {
+		auditPath := filepath.Join(m.repoRoot, ".jvs", "audit", "audit.jsonl")
+		auditLogger := audit.NewFileAppender(auditPath)
+		auditLogger.Append(model.EventTypeWorktreeRemove, name, "", map[string]any{
+			"head_snapshot_id": string(cfg.HeadSnapshotID),
+		})
 	}
 
 	return nil
@@ -211,9 +272,10 @@ func (m *Manager) Fork(snapshotID model.SnapshotID, name string, cloneFunc func(
 
 	// Create config with both head and latest set (HEAD state)
 	cfg := &model.WorktreeConfig{
-		Name:            name,
-		CreatedAt:       time.Now().UTC(),
-		HeadSnapshotID:  snapshotID,
+		Name:             name,
+		CreatedAt:        time.Now().UTC(),
+		BaseSnapshotID:   snapshotID,
+		HeadSnapshotID:   snapshotID,
 		LatestSnapshotID: snapshotID,
 	}
 

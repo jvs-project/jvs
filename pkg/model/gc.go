@@ -4,20 +4,23 @@ import "time"
 
 // Pin protects a snapshot from garbage collection.
 type Pin struct {
-	SnapshotID  SnapshotID `json:"snapshot_id"`
-	PinnedAt    time.Time  `json:"pinned_at"`
-	Reason      string     `json:"reason,omitempty"`
-	ExpiresAt   *time.Time `json:"expires_at,omitempty"`
+	SnapshotID SnapshotID `json:"snapshot_id"`
+	PinnedAt   time.Time  `json:"pinned_at"`
+	Reason     string     `json:"reason,omitempty"`
+	ExpiresAt  *time.Time `json:"expires_at,omitempty"`
 }
 
 // GCPlan is the output of gc plan phase.
 type GCPlan struct {
-	PlanID          string      `json:"plan_id"`
-	CreatedAt       time.Time   `json:"created_at"`
-	ProtectedSet    []SnapshotID `json:"protected_set"`
-	ToDelete        []SnapshotID `json:"to_delete"`
-	EstimatedBytes  int64       `json:"estimated_bytes"`
-	RetentionPolicy RetentionPolicy `json:"retention_policy"`
+	PlanID                 string          `json:"plan_id"`
+	CreatedAt              time.Time       `json:"created_at"`
+	ProtectedSet           []SnapshotID    `json:"protected_set"`
+	ProtectedByPin         int             `json:"protected_by_pin"`
+	ProtectedByLineage     int             `json:"protected_by_lineage"`
+	ToDelete               []SnapshotID    `json:"to_delete"`
+	DeletableBytesEstimate int64           `json:"deletable_bytes_estimate"`
+	EstimatedBytes         int64           `json:"estimated_bytes"` // Legacy, same as deletable_bytes_estimate
+	RetentionPolicy        RetentionPolicy `json:"retention_policy"`
 }
 
 // Tombstone marks a snapshot as deleted but not yet reclaimed.

@@ -50,9 +50,11 @@ type Descriptor struct {
 
 // ReadyMarker is the .READY file content indicating complete snapshot.
 type ReadyMarker struct {
-	SnapshotID   SnapshotID `json:"snapshot_id"`
-	CompletedAt  time.Time  `json:"completed_at"`
-	PayloadHash  HashValue  `json:"payload_root_hash"`
+	SnapshotID         SnapshotID `json:"snapshot_id"`
+	CompletedAt        time.Time  `json:"completed_at"`
+	PayloadHash        HashValue  `json:"payload_root_hash"`
+	Engine             EngineType `json:"engine"`
+	DescriptorChecksum HashValue  `json:"descriptor_checksum"`
 }
 
 // IntentRecord tracks in-progress snapshot creation for crash recovery.

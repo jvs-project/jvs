@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/jvs-project/jvs/internal/audit"
@@ -32,7 +33,7 @@ func NewCollector(repoRoot string) *Collector {
 
 // Plan creates a GC plan.
 func (c *Collector) Plan() (*model.GCPlan, error) {
-	protectedSet, err := c.computeProtectedSet()
+	protectedSet, protectedByLineage, err := c.computeProtectedSet()
 	if err != nil {
 		return nil, fmt.Errorf("compute protected set: %w", err)
 	}
@@ -56,19 +57,23 @@ func (c *Collector) Plan() (*model.GCPlan, error) {
 		}
 	}
 
+	// Estimate bytes (rough)
+	deletableBytes := int64(len(toDelete)) * 1024 * 1024 // assume 1MB each
+
 	plan := &model.GCPlan{
-		PlanID:       uuidutil.NewV4(),
-		CreatedAt:    time.Now().UTC(),
-		ProtectedSet: protectedSet,
-		ToDelete:     toDelete,
+		PlanID:                 uuidutil.NewV4(),
+		CreatedAt:              time.Now().UTC(),
+		ProtectedSet:           protectedSet,
+		ProtectedByPin:         0, // TODO: implement pin support
+		ProtectedByLineage:     protectedByLineage,
+		ToDelete:               toDelete,
+		DeletableBytesEstimate: deletableBytes,
+		EstimatedBytes:         deletableBytes, // Legacy field
 		RetentionPolicy: model.RetentionPolicy{
 			KeepMinSnapshots: 10,
 			KeepMinAge:       24 * time.Hour,
 		},
 	}
-
-	// Estimate bytes (rough)
-	plan.EstimatedBytes = int64(len(toDelete)) * 1024 * 1024 // assume 1MB each
 
 	// Write plan
 	if err := c.writePlan(plan); err != nil {
@@ -86,7 +91,7 @@ func (c *Collector) Run(planID string) error {
 	}
 
 	// Revalidate protected set
-	currentProtected, err := c.computeProtectedSet()
+	currentProtected, _, err := c.computeProtectedSet()
 	if err != nil {
 		return fmt.Errorf("revalidate protected set: %w", err)
 	}
@@ -136,14 +141,15 @@ func (c *Collector) Run(planID string) error {
 	return nil
 }
 
-func (c *Collector) computeProtectedSet() ([]model.SnapshotID, error) {
+func (c *Collector) computeProtectedSet() ([]model.SnapshotID, int, error) {
 	protected := make(map[model.SnapshotID]bool)
+	lineageCount := 0
 
 	// 1. All worktree heads
 	wtMgr := worktree.NewManager(c.repoRoot)
 	wtList, err := wtMgr.List()
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	for _, cfg := range wtList {
 		if cfg.HeadSnapshotID != "" {
@@ -153,32 +159,37 @@ func (c *Collector) computeProtectedSet() ([]model.SnapshotID, error) {
 
 	// 2. Lineage traversal (keep parent chains)
 	for id := range protected {
-		c.walkLineage(id, protected)
+		lineageCount += c.walkLineage(id, protected)
 	}
 
 	// 3. All intents (in-progress operations)
 	intentsDir := filepath.Join(c.repoRoot, ".jvs", "intents")
 	entries, _ := os.ReadDir(intentsDir)
 	for _, entry := range entries {
-		protected[model.SnapshotID(entry.Name()[:len(entry.Name())-5])] = true
+		name := entry.Name()
+		if strings.HasSuffix(name, ".json") {
+			protected[model.SnapshotID(strings.TrimSuffix(name, ".json"))] = true
+		}
 	}
 
 	var result []model.SnapshotID
 	for id := range protected {
 		result = append(result, id)
 	}
-	return result, nil
+	return result, lineageCount, nil
 }
 
-func (c *Collector) walkLineage(snapshotID model.SnapshotID, protected map[model.SnapshotID]bool) {
+func (c *Collector) walkLineage(snapshotID model.SnapshotID, protected map[model.SnapshotID]bool) int {
+	count := 0
 	desc, err := snapshot.LoadDescriptor(c.repoRoot, snapshotID)
 	if err != nil {
-		return
+		return count
 	}
 	if desc.ParentID != nil && !protected[*desc.ParentID] {
 		protected[*desc.ParentID] = true
-		c.walkLineage(*desc.ParentID, protected)
+		count = 1 + c.walkLineage(*desc.ParentID, protected)
 	}
+	return count
 }
 
 func (c *Collector) listAllSnapshots() ([]model.SnapshotID, error) {

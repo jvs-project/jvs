@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -36,13 +37,9 @@ func ListAll(repoRoot string) ([]*model.Descriptor, error) {
 	}
 
 	// Sort by creation time (newest first)
-	for i := 0; i < len(descriptors)-1; i++ {
-		for j := i + 1; j < len(descriptors); j++ {
-			if descriptors[i].CreatedAt.Before(descriptors[j].CreatedAt) {
-				descriptors[i], descriptors[j] = descriptors[j], descriptors[i]
-			}
-		}
-	}
+	sort.Slice(descriptors, func(i, j int) bool {
+		return descriptors[i].CreatedAt.After(descriptors[j].CreatedAt)
+	})
 
 	return descriptors, nil
 }

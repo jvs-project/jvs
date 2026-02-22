@@ -37,9 +37,10 @@ var gcPlanCmd = &cobra.Command{
 		}
 
 		fmt.Printf("GC Plan: %s\n", plan.PlanID)
-		fmt.Printf("  Protected: %d snapshots\n", len(plan.ProtectedSet))
+		fmt.Printf("  Protected by lineage: %d snapshots\n", plan.ProtectedByLineage)
+		fmt.Printf("  Protected by pin: %d snapshots\n", plan.ProtectedByPin)
 		fmt.Printf("  To delete: %d snapshots\n", len(plan.ToDelete))
-		fmt.Printf("  Estimated reclaim: ~%d MB\n", plan.EstimatedBytes/1024/1024)
+		fmt.Printf("  Estimated reclaim: ~%d MB\n", plan.DeletableBytesEstimate/1024/1024)
 		fmt.Println()
 		fmt.Printf("Run: jvs gc run --plan-id %s\n", plan.PlanID)
 	},

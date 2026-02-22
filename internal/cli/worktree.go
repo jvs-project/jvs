@@ -12,6 +12,10 @@ import (
 	"github.com/jvs-project/jvs/pkg/model"
 )
 
+var (
+	worktreeCreateFrom string
+)
+
 var worktreeCmd = &cobra.Command{
 	Use:     "worktree",
 	Short:   "Manage worktrees",
@@ -21,12 +25,58 @@ var worktreeCmd = &cobra.Command{
 var worktreeCreateCmd = &cobra.Command{
 	Use:   "create <name>",
 	Short: "Create a new worktree",
-	Args:  cobra.ExactArgs(1),
+	Long: `Create a new worktree.
+
+If --from is specified, the worktree is created from an existing snapshot,
+otherwise an empty worktree is created.
+
+Examples:
+  jvs worktree create feature-x                    # Create empty worktree
+  jvs worktree create hotfix --from v1.0           # Create from tag
+  jvs worktree create feature-y --from 1771589-abc # Create from snapshot`,
+	Args: cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		r := requireRepo()
 		name := args[0]
 
 		mgr := worktree.NewManager(r.Root)
+
+		// If --from is specified, create from snapshot
+		if worktreeCreateFrom != "" {
+			snapshotID, err := resolveSnapshotID(r.Root, worktreeCreateFrom)
+			if err != nil {
+				fmtErr("resolve snapshot: %v", err)
+				os.Exit(1)
+			}
+
+			// Verify snapshot exists and is valid
+			if err := snapshot.VerifySnapshot(r.Root, snapshotID, false); err != nil {
+				fmtErr("verify snapshot: %v", err)
+				os.Exit(1)
+			}
+
+			// Create engine for cloning
+			eng := engine.NewEngine(model.EngineCopy)
+
+			cfg, err := mgr.CreateFromSnapshot(name, snapshotID, func(src, dst string) error {
+				_, err := eng.Clone(src, dst)
+				return err
+			})
+			if err != nil {
+				fmtErr("create worktree from snapshot: %v", err)
+				os.Exit(1)
+			}
+
+			if jsonOutput {
+				outputJSON(cfg)
+			} else {
+				fmt.Printf("Created worktree '%s' from snapshot %s\n", name, snapshotID)
+				fmt.Printf("Path: %s\n", mgr.Path(name))
+			}
+			return
+		}
+
+		// Create empty worktree
 		cfg, err := mgr.Create(name, nil)
 		if err != nil {
 			fmtErr("create worktree: %v", err)
@@ -39,6 +89,23 @@ var worktreeCreateCmd = &cobra.Command{
 			fmt.Printf("Created worktree '%s' at %s\n", name, mgr.Path(name))
 		}
 	},
+}
+
+// resolveSnapshotID resolves a snapshot reference to a full snapshot ID.
+func resolveSnapshotID(repoRoot, ref string) (model.SnapshotID, error) {
+	// Try exact match first
+	testID := model.SnapshotID(ref)
+	_, err := snapshot.LoadDescriptor(repoRoot, testID)
+	if err == nil {
+		return testID, nil
+	}
+
+	// Try fuzzy match
+	desc, err := snapshot.FindOne(repoRoot, ref)
+	if err != nil {
+		return "", fmt.Errorf("snapshot not found: %s", ref)
+	}
+	return desc.SnapshotID, nil
 }
 
 var worktreeListCmd = &cobra.Command{
@@ -244,8 +311,8 @@ Examples:
 			os.Exit(1)
 		}
 
-		// Create engine for cloning
-		eng := engine.NewCopyEngine()
+		// Create engine for cloning (use copy engine as default)
+		eng := engine.NewEngine(model.EngineCopy)
 
 		// Fork the worktree
 		mgr := worktree.NewManager(r.Root)
@@ -269,6 +336,7 @@ Examples:
 }
 
 func init() {
+	worktreeCreateCmd.Flags().StringVar(&worktreeCreateFrom, "from", "", "create from snapshot (ID, tag, or note prefix)")
 	worktreeCmd.AddCommand(worktreeCreateCmd)
 	worktreeCmd.AddCommand(worktreeListCmd)
 	worktreeCmd.AddCommand(worktreePathCmd)
