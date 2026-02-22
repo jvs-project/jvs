@@ -1,5 +1,52 @@
 # Changelog
 
+## v7.2 — 2026-02-23
+
+### KISS Simplification: Focus on Core Value
+- **Removed unused packages**: Deleted `pkg/webhook/` (409 lines), `pkg/metrics/` (61 lines), and `pkg/template/` (75 lines)
+- **Simplified configuration**: Reduced `pkg/config/config.go` from 500 to 269 lines (-231 lines)
+- **Removed template CLI**: Deleted `internal/cli/template.go` (137 lines) and template subsystem
+- **Total code reduction**: ~900 lines of unused or low-value code removed
+
+### What was removed
+- **Webhook system**: HTTP webhook notification infrastructure (was never integrated into core workflow)
+- **Metrics system**: Empty Prometheus metrics implementation (no actual metrics were exported)
+- **Template system**: Snapshot template extension code (low usage, high complexity)
+
+### What was preserved
+- **Core features**: snapshot, restore, worktree, tags, verify, doctor, gc
+- **Config file**: Simplified to 4 settings (default_engine, default_tags, output_format, progress_enabled)
+- **All user-facing functionality**: No breaking changes to CLI commands or workflows
+
+### Why these changes?
+Following the KISS principle and user research (see docs/TARGET_USERS.md), JVS is focusing on its core value proposition: **O(1) snapshots for large files that Git cannot handle**. The removed features were either:
+1. Unused infrastructure (webhooks, metrics)
+2. Low-value complexity (templates)
+3. Outside core scope (monitoring, notifications belong in external tools)
+
+### Documentation updates
+- **Quick start guides**: Added game_dev_quickstart.md, agent_sandbox_quickstart.md, etl_pipeline_quickstart.md
+- **Templates**: Added TEMPLATES.md with `.jvsignore` patterns for common scenarios
+- **User research**: Added TARGET_USERS.md with pain point analysis for 3 target scenarios
+- **Feature scope**: Added FEATURE_SCOPE_REFINEMENTS.md with KISS-aligned recommendations
+
+### Migration from v7.1
+**No breaking changes.** All v7.1 repositories and snapshots are fully compatible with v7.2.
+
+If you were using webhook or template features:
+- Webhooks: Use external tools (Airflow webhooks, cron jobs, or script wrappers)
+- Templates: Use shell scripts or CI/CD pipelines instead
+
+### Affected files
+- Removed: pkg/webhook/, pkg/metrics/, pkg/template/
+- Removed: internal/cli/template.go, docs/WEBHOOKS.md
+- Simplified: pkg/config/config.go
+- Added: docs/TARGET_USERS.md, docs/FEATURE_SCOPE_REFINEMENTS.md
+- Added: docs/game_dev_quickstart.md, docs/agent_sandbox_quickstart.md, docs/etl_pipeline_quickstart.md
+- Added: docs/TEMPLATES.md
+
+---
+
 ## v7.1 — 2026-02-23
 
 ### Quality and maturity improvements for CNCF readiness

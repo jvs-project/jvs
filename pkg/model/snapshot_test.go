@@ -311,3 +311,174 @@ func TestRetentionPolicy_Fields(t *testing.T) {
 	assert.Equal(t, 20, policy.KeepMinSnapshots)
 	assert.Equal(t, 48*time.Hour, policy.KeepMinAge)
 }
+
+func TestRetentionPolicy_Validate_Valid(t *testing.T) {
+	tests := []struct {
+		name   string
+		policy model.RetentionPolicy
+	}{
+		{
+			name: "zero values are valid",
+			policy: model.RetentionPolicy{
+				KeepMinSnapshots: 0,
+				KeepMinAge:       0,
+			},
+		},
+		{
+			name: "positive values are valid",
+			policy: model.RetentionPolicy{
+				KeepMinSnapshots: 10,
+				KeepMinAge:       24 * time.Hour,
+			},
+		},
+		{
+			name: "only keep_min_snapshots set",
+			policy: model.RetentionPolicy{
+				KeepMinSnapshots: 5,
+				KeepMinAge:       0,
+			},
+		},
+		{
+			name: "only keep_min_age set",
+			policy: model.RetentionPolicy{
+				KeepMinSnapshots: 0,
+				KeepMinAge:       12 * time.Hour,
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.policy.Validate()
+			assert.NoError(t, err)
+		})
+	}
+}
+
+func TestRetentionPolicy_Validate_Invalid(t *testing.T) {
+	tests := []struct {
+		name        string
+		policy      model.RetentionPolicy
+		expectedErr string
+	}{
+		{
+			name: "negative keep_min_snapshots",
+			policy: model.RetentionPolicy{
+				KeepMinSnapshots: -1,
+				KeepMinAge:       0,
+			},
+			expectedErr: "invalid retention policy: keep_min_snapshots must be non-negative",
+		},
+		{
+			name: "negative keep_min_age",
+			policy: model.RetentionPolicy{
+				KeepMinSnapshots: 0,
+				KeepMinAge:       -1 * time.Hour,
+			},
+			expectedErr: "invalid retention policy: keep_min_age must be non-negative",
+		},
+		{
+			name: "both negative",
+			policy: model.RetentionPolicy{
+				KeepMinSnapshots: -5,
+				KeepMinAge:       -24 * time.Hour,
+			},
+			expectedErr: "invalid retention policy: keep_min_snapshots must be non-negative",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.policy.Validate()
+			assert.Error(t, err)
+			assert.Contains(t, err.Error(), tt.expectedErr)
+		})
+	}
+}
+
+func TestInvalidRetentionPolicyError_Error(t *testing.T) {
+	err := &model.InvalidRetentionPolicyError{
+		Field:  "keep_min_snapshots",
+		Reason: "must be non-negative",
+		Value:  -1,
+	}
+	expected := "invalid retention policy: keep_min_snapshots must be non-negative (got: -1)"
+	assert.Equal(t, expected, err.Error())
+}
+
+func TestDefaultRetentionPolicy(t *testing.T) {
+	policy := model.DefaultRetentionPolicy()
+	assert.Equal(t, 0, policy.KeepMinSnapshots)
+	assert.Equal(t, 24*time.Hour, policy.KeepMinAge)
+}
+
+func TestGCPlan_ProtectedByRetention(t *testing.T) {
+	plan := model.GCPlan{
+		PlanID:               "plan-123",
+		CreatedAt:            time.Date(2024, 2, 19, 0, 0, 0, 0, time.UTC),
+		ProtectedByRetention: 3,
+	}
+	assert.Equal(t, 3, plan.ProtectedByRetention)
+}
+
+func TestCompressionInfo_Fields(t *testing.T) {
+	comp := model.CompressionInfo{
+		Type:  "gzip",
+		Level: 6,
+	}
+	assert.Equal(t, "gzip", comp.Type)
+	assert.Equal(t, 6, comp.Level)
+}
+
+func TestDescriptor_Compression(t *testing.T) {
+	comp := &model.CompressionInfo{
+		Type:  "gzip",
+		Level: 9,
+	}
+	desc := model.Descriptor{
+		SnapshotID:  "1708300800000-a3f7c1b2",
+		Compression: comp,
+	}
+	assert.NotNil(t, desc.Compression)
+	assert.Equal(t, "gzip", desc.Compression.Type)
+	assert.Equal(t, 9, desc.Compression.Level)
+}
+
+func TestDescriptor_NoCompression(t *testing.T) {
+	desc := model.Descriptor{
+		SnapshotID: "1708300800000-a3f7c1b2",
+	}
+	assert.Nil(t, desc.Compression)
+}
+
+func TestDescriptor_PartialPaths(t *testing.T) {
+	desc := model.Descriptor{
+		SnapshotID:   "1708300800000-a3f7c1b2",
+		PartialPaths: []string{"models/", "data/"},
+	}
+	assert.Equal(t, []string{"models/", "data/"}, desc.PartialPaths)
+}
+
+func TestDescriptor_FullSnapshot(t *testing.T) {
+	desc := model.Descriptor{
+		SnapshotID:   "1708300800000-a3f7c1b2",
+		PartialPaths: nil,
+	}
+	assert.Nil(t, desc.PartialPaths)
+}
+
+func TestDescriptor_EmptyPartialPaths(t *testing.T) {
+	desc := model.Descriptor{
+		SnapshotID:   "1708300800000-a3f7c1b2",
+		PartialPaths: []string{},
+	}
+	assert.Equal(t, []string{}, desc.PartialPaths)
+}
+
+func TestHashValue(t *testing.T) {
+	hash := model.HashValue("abc123def456")
+	assert.Equal(t, "abc123def456", string(hash))
+}
+
+func TestHashValue_Empty(t *testing.T) {
+	hash := model.HashValue("")
+	assert.Equal(t, "", string(hash))
+}

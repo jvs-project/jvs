@@ -64,6 +64,11 @@ make build
 
 > **New to JVS?** See the [Quick Start Guide](docs/QUICKSTART.md) for a 5-minute tutorial.
 
+**Scenario-specific guides:**
+- [Game Development](docs/game_dev_quickstart.md) - Unity/Unreal asset versioning
+- [Agent Sandboxes](docs/agent_sandbox_quickstart.md) - AI/ML experiment workflows
+- [ETL Pipelines](docs/etl_pipeline_quickstart.md) - Data pipeline versioning
+
 ### 1) Prepare a JuiceFS mount (optional but recommended)
 ```bash
 juicefs format redis://127.0.0.1:6379/1 myvol
@@ -151,4 +156,7 @@ See [UPGRADE.md](UPGRADE.md) for upgrade guides between versions, including:
 - Backup recommendations
 - Post-upgrade verification steps
 
-**Spec version:** v7.0 (2026-02-22)
+**Spec version:** v7.2 (2026-02-23)
+
+## Recent Changes (v7.2)
+KISS simplification: Removed ~900 lines of unused code (webhooks, metrics, templates). Focus on core value: O(1) snapshots for large files. See [CHANGELOG.md](docs/99_CHANGELOG.md).
