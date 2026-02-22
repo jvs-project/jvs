@@ -1,0 +1,56 @@
+# Git files
+.git
+.gitignore
+.github
+
+# Documentation
+docs
+*.md
+!README.md
+
+# Test files
+*_test.go
+test/
+scripts/
+.coverage
+coverage.out
+
+# Build artifacts
+bin/
+*.exe
+*.dll
+*.so
+*.dylib
+jvs
+
+# IDE files
+.vscode/
+.vs/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# CI/CD
+.gitlab-ci.yml
+.travis.yml
+azure-pipelines.yml
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.log
+
+# Node modules (if any web UI)
+node_modules/
+
+# Python files (if any tools)
+__pycache__/
+*.py[cod]
+*.pyo
+.Python

@@ -31,10 +31,29 @@ type Config struct {
 	// ProgressEnabled enables progress bars by default.
 	ProgressEnabled *bool `yaml:"progress_enabled,omitempty"`
 
+	// SnapshotTemplates defines pre-configured snapshot patterns.
+	SnapshotTemplates map[string]SnapshotTemplate `yaml:"snapshot_templates,omitempty"`
+
 	// Legacy fields for backward compatibility
 	Engine          string                `yaml:"engine,omitempty"`
 	RetentionPolicy RetentionPolicyConfig `yaml:"retention_policy,omitempty"`
 	Logging         LoggingConfig         `yaml:"logging,omitempty"`
+}
+
+// SnapshotTemplate defines a pre-configured snapshot pattern.
+type SnapshotTemplate struct {
+	// Note is the note template for the snapshot.
+	// Supports placeholders: {date}, {time}, {datetime}, {user}, {hostname}
+	Note string `yaml:"note,omitempty"`
+
+	// Tags are tags to automatically apply.
+	Tags []string `yaml:"tags,omitempty"`
+
+	// Compression is the compression level to use.
+	Compression string `yaml:"compression,omitempty"` // none, fast, default, max
+
+	// Paths are paths to include for partial snapshots (empty = full snapshot).
+	Paths []string `yaml:"paths,omitempty"`
 }
 
 // RetentionPolicyConfig configures GC retention.
@@ -263,3 +282,91 @@ func cacheAndReturn(repoRoot string, cfg *Config) {
 	cache[repoRoot] = cfg
 	cacheMu.Unlock()
 }
+
+// GetSnapshotTemplate returns a snapshot template by name.
+// Returns nil if the template doesn't exist.
+func (c *Config) GetSnapshotTemplate(name string) *SnapshotTemplate {
+	if c.SnapshotTemplates == nil {
+		return nil
+	}
+	if tmpl, ok := c.SnapshotTemplates[name]; ok {
+		return &tmpl
+	}
+	return nil
+}
+
+// GetBuiltinTemplates returns the built-in snapshot templates.
+func GetBuiltinTemplates() map[string]SnapshotTemplate {
+	return map[string]SnapshotTemplate{
+		"pre-experiment": {
+			Note: "Before experiment: {datetime}",
+			Tags: []string{"experiment", "checkpoint"},
+		},
+		"pre-deploy": {
+			Note: "Pre-deployment checkpoint: {datetime}",
+			Tags: []string{"pre-deploy", "release"},
+		},
+		"checkpoint": {
+			Note: "Checkpoint: {datetime}",
+			Tags: []string{"checkpoint"},
+		},
+		"work": {
+			Note: "Work in progress: {datetime}",
+			Tags: []string{"wip"},
+		},
+		"release": {
+			Note: "Release: {datetime}",
+			Tags: []string{"release", "stable"},
+		},
+		"archive": {
+			Note: "Archive: {datetime}",
+			Tags: []string{"archive"},
+			Compression: "max",
+		},
+	}
+}
+
+// ResolveTemplate resolves a template name to an actual SnapshotTemplate.
+// Checks user-defined templates first, then built-in templates.
+func ResolveTemplate(repoRoot string, name string) *SnapshotTemplate {
+	cfg, _ := Load(repoRoot)
+
+	// Check user-defined templates first
+	if tmpl := cfg.GetSnapshotTemplate(name); tmpl != nil {
+		return tmpl
+	}
+
+	// Check built-in templates
+	builtin := GetBuiltinTemplates()
+	if tmpl, ok := builtin[name]; ok {
+		return &tmpl
+	}
+
+	return nil
+}
+
+// ListTemplates returns all available template names (user + built-in).
+func ListTemplates(repoRoot string) []string {
+	cfg, _ := Load(repoRoot)
+	names := make(map[string]bool)
+
+	// Add user-defined templates
+	if cfg.SnapshotTemplates != nil {
+		for name := range cfg.SnapshotTemplates {
+			names[name] = true
+		}
+	}
+
+	// Add built-in templates
+	for name := range GetBuiltinTemplates() {
+		names[name] = true
+	}
+
+	// Convert to sorted slice
+	result := make([]string, 0, len(names))
+	for name := range names {
+		result = append(result, name)
+	}
+	return result
+}
+

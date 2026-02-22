@@ -1,7 +1,8 @@
 #!/bin/bash
 # Test script for jvs-sync.sh
 
-set -euo pipefail
+# Don't use set -e as it causes early exit on test failures
+# We handle errors manually in each test
 
 # Colors
 RED='\033[0;31m'
@@ -66,7 +67,8 @@ EOF
 test_help_output() {
     log_info "Testing help output..."
 
-    if ./scripts/jvs-sync.sh --help 2>&1 | grep -q "JVS Sync Helper"; then
+    # Use sed to strip escape codes, then grep
+    if ./scripts/jvs-sync.sh --help 2>&1 | sed 's/\x1b\[[0-9;]*m//g' | grep -q "JVS Sync Helper"; then
         log_pass "Help command works"
     else
         log_fail "Help command output missing expected text"

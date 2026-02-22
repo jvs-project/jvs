@@ -27,6 +27,7 @@ DRY_RUN=false
 VERBOSE=false
 THREADS=10
 EXCLUDE_PATTERNS=()
+RSYNC_ONLY=false
 JVS_EXCLUDE=(".jvs/intents/*" ".jvs/index.sqlite" ".jvs/*.lock")
 
 # Logging functions
@@ -492,6 +493,14 @@ cmd_verify() {
 
 # Main script
 main() {
+    # Check for help flag anywhere in arguments
+    for arg in "$@"; do
+        if [[ "$arg" == "-h" || "$arg" == "--help" ]]; then
+            show_usage
+            exit 0
+        fi
+    done
+
     if [[ $# -eq 0 ]]; then
         show_usage
         exit 0
@@ -500,13 +509,9 @@ main() {
     local command="$1"
     shift
 
-    # Parse options
+    # Parse options (excluding -h/--help which was handled above)
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            -h|--help)
-                show_usage
-                exit 0
-                ;;
             -n|--dry-run)
                 DRY_RUN=true
                 shift

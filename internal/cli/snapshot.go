@@ -12,12 +12,14 @@ import (
 	"github.com/jvs-project/jvs/pkg/config"
 	"github.com/jvs-project/jvs/pkg/model"
 	"github.com/jvs-project/jvs/pkg/pathutil"
+	"github.com/jvs-project/jvs/pkg/template"
 )
 
 var (
-	snapshotTags       []string
-	snapshotPaths      []string
+	snapshotTags        []string
+	snapshotPaths       []string
 	snapshotCompression string
+	snapshotTemplate    string
 )
 
 var snapshotCmd = &cobra.Command{
