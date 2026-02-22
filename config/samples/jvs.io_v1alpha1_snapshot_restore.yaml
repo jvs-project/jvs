@@ -1,0 +1,11 @@
+apiVersion: jvs.io/v1alpha1
+kind: Snapshot
+metadata:
+  name: example-snapshot-with-restore
+spec:
+  workspace: example-workspace
+  note: "Snapshot with automatic restore"
+  tags:
+  - test
+  restoreOnCreate: true
+  restoreWorktree: test-branch
