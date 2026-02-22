@@ -10,14 +10,14 @@ import (
 
 func TestDefault(t *testing.T) {
 	cfg := Default()
-	if cfg.Engine != "auto" {
-		t.Errorf("expected engine 'auto', got %s", cfg.Engine)
+	if cfg.DefaultEngine != "" {
+		t.Errorf("expected empty engine, got %s", cfg.DefaultEngine)
 	}
-	if cfg.RetentionPolicy.KeepMinSnapshots != 10 {
-		t.Errorf("expected KeepMinSnapshots 10, got %d", cfg.RetentionPolicy.KeepMinSnapshots)
+	if cfg.DefaultTags != nil {
+		t.Errorf("expected nil tags, got %v", cfg.DefaultTags)
 	}
-	if cfg.Logging.Level != "info" {
-		t.Errorf("expected logging level 'info', got %s", cfg.Logging.Level)
+	if cfg.OutputFormat != "" {
+		t.Errorf("expected empty output_format, got %s", cfg.OutputFormat)
 	}
 }
 
@@ -36,8 +36,8 @@ func TestLoad_NotExists(t *testing.T) {
 		t.Error("expected config, got nil")
 	}
 	// Should return default config
-	if cfg.Engine != "auto" {
-		t.Errorf("expected default engine, got %s", cfg.Engine)
+	if cfg.DefaultEngine != "" {
+		t.Errorf("expected empty default_engine, got %s", cfg.DefaultEngine)
 	}
 }
 
@@ -55,13 +55,12 @@ func TestLoad_Exists(t *testing.T) {
 	}
 
 	configContent := `
-engine: juicefs
-retention_policy:
-  keep_min_snapshots: 20
-  keep_min_age: 48h
-logging:
-  level: debug
-  format: json
+default_engine: juicefs-clone
+default_tags:
+  - auto
+  - dev
+output_format: json
+progress_enabled: false
 `
 	configPath := filepath.Join(jvsDir, "config.yaml")
 	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
@@ -72,17 +71,17 @@ logging:
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
-	if cfg.Engine != "juicefs" {
-		t.Errorf("expected engine 'juicefs', got %s", cfg.Engine)
+	if cfg.DefaultEngine != "juicefs-clone" {
+		t.Errorf("expected default_engine 'juicefs-clone', got %s", cfg.DefaultEngine)
 	}
-	if cfg.RetentionPolicy.KeepMinSnapshots != 20 {
-		t.Errorf("expected KeepMinSnapshots 20, got %d", cfg.RetentionPolicy.KeepMinSnapshots)
+	if len(cfg.DefaultTags) != 2 {
+		t.Errorf("expected 2 default tags, got %d", len(cfg.DefaultTags))
 	}
-	if cfg.Logging.Level != "debug" {
-		t.Errorf("expected logging level 'debug', got %s", cfg.Logging.Level)
+	if cfg.OutputFormat != "json" {
+		t.Errorf("expected output_format 'json', got %s", cfg.OutputFormat)
 	}
-	if cfg.Logging.Format != "json" {
-		t.Errorf("expected logging format 'json', got %s", cfg.Logging.Format)
+	if cfg.ProgressEnabled == nil || *cfg.ProgressEnabled != false {
+		t.Error("expected progress_enabled to be false")
 	}
 }
 
@@ -93,16 +92,12 @@ func TestSave(t *testing.T) {
 	}
 	defer os.RemoveAll(tmpDir)
 
+	enabled := false
 	cfg := &Config{
-		Engine: "reflink",
-		RetentionPolicy: RetentionPolicyConfig{
-			KeepMinSnapshots: 15,
-			KeepMinAge:       "12h",
-		},
-		Logging: LoggingConfig{
-			Level:  "warn",
-			Format: "text",
-		},
+		DefaultEngine:   "copy",
+		DefaultTags:     []string{"test"},
+		OutputFormat:    "text",
+		ProgressEnabled: &enabled,
 	}
 
 	if err := Save(tmpDir, cfg); err != nil {
@@ -120,8 +115,8 @@ func TestSave(t *testing.T) {
 	if err != nil {
 		t.Errorf("unexpected error loading: %v", err)
 	}
-	if loaded.Engine != "reflink" {
-		t.Errorf("expected engine 'reflink', got %s", loaded.Engine)
+	if loaded.DefaultEngine != "copy" {
+		t.Errorf("expected engine 'copy', got %s", loaded.DefaultEngine)
 	}
 }
 
@@ -138,7 +133,7 @@ func TestLoad_InvalidYAML(t *testing.T) {
 	}
 
 	invalidYAML := `
-engine: [this is invalid yaml
+default_engine: [this is invalid yaml
 `
 	configPath := filepath.Join(jvsDir, "config.yaml")
 	if err := os.WriteFile(configPath, []byte(invalidYAML), 0644); err != nil {
@@ -374,10 +369,10 @@ func TestKeys(t *testing.T) {
 	}
 
 	expectedKeys := map[string]bool{
-		"default_engine":    false,
-		"default_tags":      false,
-		"output_format":     false,
-		"progress_enabled":  false,
+		"default_engine":   false,
+		"default_tags":     false,
+		"output_format":    false,
+		"progress_enabled": false,
 	}
 
 	for _, key := range keys {

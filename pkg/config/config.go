@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 
 	"github.com/jvs-project/jvs/pkg/model"
 	"gopkg.in/yaml.v3"
@@ -30,6 +31,18 @@ type Config struct {
 
 	// ProgressEnabled enables progress bars by default.
 	ProgressEnabled *bool `yaml:"progress_enabled,omitempty"`
+
+	// Retention configures garbage collection behavior.
+	Retention *RetentionPolicy `yaml:"retention,omitempty"`
+}
+
+// RetentionPolicy configures GC retention behavior.
+type RetentionPolicy struct {
+	// Keep is the minimum number of snapshots to keep.
+	Keep int `yaml:"keep,omitempty"`
+
+	// Within is the minimum age before snapshots can be pruned (e.g., "24h", "7d").
+	Within string `yaml:"within,omitempty"`
 }
 
 // Default returns the default configuration.
@@ -151,6 +164,24 @@ func (c *Config) GetOutputFormat() string {
 // Returns nil if not configured (auto-detect based on terminal).
 func (c *Config) GetProgressEnabled() *bool {
 	return c.ProgressEnabled
+}
+
+// GetRetentionPolicy returns the retention policy as a model.RetentionPolicy.
+func (c *Config) GetRetentionPolicy() model.RetentionPolicy {
+	policy := model.DefaultRetentionPolicy()
+
+	if c.Retention != nil {
+		if c.Retention.Keep > 0 {
+			policy.KeepMinSnapshots = c.Retention.Keep
+		}
+		if c.Retention.Within != "" {
+			if d, err := time.ParseDuration(c.Retention.Within); err == nil {
+				policy.KeepMinAge = d
+			}
+		}
+	}
+
+	return policy
 }
 
 // Set sets a configuration value by key.

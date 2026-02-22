@@ -277,7 +277,6 @@ func TestGCPlan_Fields(t *testing.T) {
 		CandidateCount:         10,
 		ToDelete:               []model.SnapshotID{"snap3", "snap4"},
 		DeletableBytesEstimate: 1024 * 1024,
-		EstimatedBytes:         1024 * 1024,
 		RetentionPolicy: model.RetentionPolicy{
 			KeepMinSnapshots: 10,
 			KeepMinAge:       24 * time.Hour,
@@ -307,10 +306,8 @@ func TestRetentionPolicy_Fields(t *testing.T) {
 	policy := model.RetentionPolicy{
 		KeepMinSnapshots: 20,
 		KeepMinAge:       48 * time.Hour,
-		KeepAllWithin:    7 * 24 * time.Hour,
 	}
 
 	assert.Equal(t, 20, policy.KeepMinSnapshots)
 	assert.Equal(t, 48*time.Hour, policy.KeepMinAge)
-	assert.Equal(t, 7*24*time.Hour, policy.KeepAllWithin)
 }

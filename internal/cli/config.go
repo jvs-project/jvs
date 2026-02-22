@@ -74,28 +74,6 @@ var configShowCmd = &cobra.Command{
 		} else {
 			fmt.Println("progress_enabled: (auto-detect)")
 		}
-
-		// Show legacy config if present
-		if cfg.Engine != "" || cfg.RetentionPolicy.KeepMinSnapshots > 0 || cfg.Logging.Level != "" {
-			fmt.Println("\n# Legacy configuration (for backward compatibility)")
-			if cfg.Engine != "" {
-				fmt.Printf("engine: %s\n", cfg.Engine)
-			}
-			if cfg.RetentionPolicy.KeepMinSnapshots > 0 {
-				fmt.Printf("retention_policy:\n")
-				fmt.Printf("  keep_min_snapshots: %d\n", cfg.RetentionPolicy.KeepMinSnapshots)
-				if cfg.RetentionPolicy.KeepMinAge != "" {
-					fmt.Printf("  keep_min_age: %s\n", cfg.RetentionPolicy.KeepMinAge)
-				}
-			}
-			if cfg.Logging.Level != "" {
-				fmt.Printf("logging:\n")
-				fmt.Printf("  level: %s\n", cfg.Logging.Level)
-				if cfg.Logging.Format != "" {
-					fmt.Printf("  format: %s\n", cfg.Logging.Format)
-				}
-			}
-		}
 	},
 }
 

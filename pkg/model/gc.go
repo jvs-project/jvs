@@ -1,6 +1,9 @@
 package model
 
-import "time"
+import (
+	"fmt"
+	"time"
+)
 
 // Pin protects a snapshot from garbage collection.
 type Pin struct {
@@ -17,10 +20,10 @@ type GCPlan struct {
 	ProtectedSet           []SnapshotID    `json:"protected_set"`
 	ProtectedByPin         int             `json:"protected_by_pin"`
 	ProtectedByLineage     int             `json:"protected_by_lineage"`
+	ProtectedByRetention   int             `json:"protected_by_retention"`
 	CandidateCount         int             `json:"candidate_count"`
 	ToDelete               []SnapshotID    `json:"to_delete"`
 	DeletableBytesEstimate int64           `json:"deletable_bytes_estimate"`
-	EstimatedBytes         int64           `json:"estimated_bytes"` // Legacy, same as deletable_bytes_estimate
 	RetentionPolicy        RetentionPolicy `json:"retention_policy"`
 }
 
@@ -31,9 +34,56 @@ type Tombstone struct {
 	Reclaimable bool       `json:"reclaimable"`
 }
 
-// RetentionPolicy configures which snapshots to keep.
+// DefaultRetentionPolicy returns the default retention policy.
+func DefaultRetentionPolicy() RetentionPolicy {
+	return RetentionPolicy{
+		KeepMinSnapshots: 0, // No minimum - rely on lineage and pins
+		KeepMinAge:       24 * time.Hour,
+	}
+}
+
+// RetentionPolicy configures which snapshots to keep during GC.
+// Snapshots are protected if they match ANY of these rules:
+// - Within the last N snapshots (KeepMinSnapshots)
+// - Created within the last duration (KeepMinAge)
+// - Pinned explicitly
+// - Part of a worktree's lineage
 type RetentionPolicy struct {
-	KeepMinSnapshots int           `json:"keep_min_snapshots"`
-	KeepMinAge       time.Duration `json:"keep_min_age"`
-	KeepAllWithin    time.Duration `json:"keep_all_within"`
+	// KeepMinSnapshots ensures at least N snapshots are always kept.
+	// The most recent snapshots by creation time are protected.
+	KeepMinSnapshots int `json:"keep_min_snapshots"`
+
+	// KeepMinAge protects snapshots younger than this duration.
+	// Snapshots created within this time window are never deleted.
+	KeepMinAge time.Duration `json:"keep_min_age"`
+}
+
+// Validate checks if the retention policy is valid.
+func (rp *RetentionPolicy) Validate() error {
+	if rp.KeepMinSnapshots < 0 {
+		return &InvalidRetentionPolicyError{
+			Field:  "keep_min_snapshots",
+			Reason: "must be non-negative",
+			Value:  rp.KeepMinSnapshots,
+		}
+	}
+	if rp.KeepMinAge < 0 {
+		return &InvalidRetentionPolicyError{
+			Field:  "keep_min_age",
+			Reason: "must be non-negative",
+			Value:  rp.KeepMinAge,
+		}
+	}
+	return nil
+}
+
+// InvalidRetentionPolicyError is returned when a retention policy is invalid.
+type InvalidRetentionPolicyError struct {
+	Field  string
+	Reason string
+	Value  interface{}
+}
+
+func (e *InvalidRetentionPolicyError) Error() string {
+	return fmt.Sprintf("invalid retention policy: %s %s (got: %v)", e.Field, e.Reason, e.Value)
 }
