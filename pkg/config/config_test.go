@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/jvs-project/jvs/pkg/model"
 )
@@ -386,5 +387,401 @@ func TestKeys(t *testing.T) {
 		if !found {
 			t.Errorf("missing key: %s", key)
 		}
+	}
+}
+
+// TestGetProgressEnabled tests the GetProgressEnabled method.
+func TestGetProgressEnabled(t *testing.T) {
+	t.Run("Returns pointer when set", func(t *testing.T) {
+		enabled := true
+		cfg := &Config{ProgressEnabled: &enabled}
+		result := cfg.GetProgressEnabled()
+		if result == nil {
+			t.Error("expected non-nil result")
+		} else if *result != true {
+			t.Error("expected true")
+		}
+	})
+
+	t.Run("Returns nil when not set", func(t *testing.T) {
+		cfg := &Config{ProgressEnabled: nil}
+		result := cfg.GetProgressEnabled()
+		if result != nil {
+			t.Error("expected nil result")
+		}
+	})
+
+	t.Run("Returns false pointer when set to false", func(t *testing.T) {
+		disabled := false
+		cfg := &Config{ProgressEnabled: &disabled}
+		result := cfg.GetProgressEnabled()
+		if result == nil {
+			t.Error("expected non-nil result")
+		} else if *result != false {
+			t.Error("expected false")
+		}
+	})
+}
+
+// TestGetRetentionPolicy tests the GetRetentionPolicy method.
+func TestGetRetentionPolicy(t *testing.T) {
+	t.Run("Returns default policy when retention is nil", func(t *testing.T) {
+		cfg := &Config{Retention: nil}
+		policy := cfg.GetRetentionPolicy()
+		// Default should be 0 KeepMinSnapshots and 24h KeepMinAge
+		if policy.KeepMinSnapshots != 0 {
+			t.Errorf("expected 0 KeepMinSnapshots, got %d", policy.KeepMinSnapshots)
+		}
+		if policy.KeepMinAge == 0 {
+			t.Error("expected non-zero KeepMinAge")
+		}
+	})
+
+	t.Run("Returns configured policy when retention is set", func(t *testing.T) {
+		cfg := &Config{
+			Retention: &RetentionPolicy{
+				Keep:   10,
+				Within: "48h",
+			},
+		}
+		policy := cfg.GetRetentionPolicy()
+		if policy.KeepMinSnapshots != 10 {
+			t.Errorf("expected 10 KeepMinSnapshots, got %d", policy.KeepMinSnapshots)
+		}
+		// 48h = 48 * 60 * 60 * 1e9 = 172800000000000 ns
+		expectedDuration := 48 * time.Hour
+		if policy.KeepMinAge != expectedDuration {
+			t.Errorf("expected %v KeepMinAge, got %v", expectedDuration, policy.KeepMinAge)
+		}
+	})
+
+	t.Run("Partial config uses defaults for unset fields", func(t *testing.T) {
+		cfg := &Config{
+			Retention: &RetentionPolicy{
+				Keep:   5,
+				Within: "",
+			},
+		}
+		policy := cfg.GetRetentionPolicy()
+		if policy.KeepMinSnapshots != 5 {
+			t.Errorf("expected 5 KeepMinSnapshots, got %d", policy.KeepMinSnapshots)
+		}
+		// KeepMinAge should be default since Within is empty
+		if policy.KeepMinAge == 0 {
+			t.Error("expected non-zero default KeepMinAge")
+		}
+	})
+
+	t.Run("Only Within set uses default for Keep", func(t *testing.T) {
+		cfg := &Config{
+			Retention: &RetentionPolicy{
+				Keep:   0,
+				Within: "168h", // 7 days in hours
+			},
+		}
+		policy := cfg.GetRetentionPolicy()
+		if policy.KeepMinSnapshots != 0 {
+			t.Errorf("expected 0 KeepMinSnapshots, got %d", policy.KeepMinSnapshots)
+		}
+		// 168h = 7 * 24 hours
+		expectedDuration := 168 * time.Hour
+		if policy.KeepMinAge != expectedDuration {
+			t.Errorf("expected %v KeepMinAge, got %v", expectedDuration, policy.KeepMinAge)
+		}
+	})
+
+	t.Run("Invalid Within string uses default", func(t *testing.T) {
+		cfg := &Config{
+			Retention: &RetentionPolicy{
+				Keep:   0,
+				Within: "invalid-duration",
+			},
+		}
+		policy := cfg.GetRetentionPolicy()
+		// Should fall back to default when parsing fails
+		if policy.KeepMinAge == 0 {
+			t.Error("expected non-zero default KeepMinAge")
+		}
+	})
+}
+
+// TestInvalidateCache tests the InvalidateCache function.
+func TestInvalidateCache(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "jvs-config-cache-test-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Create a config file
+	jvsDir := filepath.Join(tmpDir, ".jvs")
+	if err := os.MkdirAll(jvsDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	configContent := `
+default_engine: reflink-copy
+default_tags:
+  - cached
+`
+	configPath := filepath.Join(jvsDir, "config.yaml")
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Load the config (will be cached)
+	cfg1, err := Load(tmpDir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg1.DefaultEngine != "reflink-copy" {
+		t.Errorf("expected reflink-copy, got %s", cfg1.DefaultEngine)
+	}
+
+	// Modify the config file directly
+	configContent = `
+default_engine: juicefs-clone
+default_tags:
+  - modified
+`
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Load again without invalidate - should get cached value
+	cfg2, err := Load(tmpDir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg2.DefaultEngine != "reflink-copy" {
+		t.Errorf("expected cached value reflink-copy, got %s", cfg2.DefaultEngine)
+	}
+
+	// Invalidate cache
+	InvalidateCache(tmpDir)
+
+	// Load again - should get new value
+	cfg3, err := Load(tmpDir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg3.DefaultEngine != "juicefs-clone" {
+		t.Errorf("expected juicefs-clone after invalidate, got %s", cfg3.DefaultEngine)
+	}
+
+	// Invalidate non-existent cache path (should not panic)
+	InvalidateCache("/nonexistent/path/that/does/not/exist")
+}
+
+// TestSave_InvalidConfig tests Save with invalid configuration.
+func TestSave_InvalidConfig(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "jvs-config-save-invalid-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Create config with invalid engine
+	cfg := &Config{
+		DefaultEngine: "invalid-engine-type",
+	}
+
+	err = Save(tmpDir, cfg)
+	if err == nil {
+		t.Error("expected error for invalid config")
+	}
+}
+
+// TestSave_WithRetentionPolicy tests Save with retention policy.
+func TestSave_WithRetentionPolicy(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "jvs-config-retention-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	cfg := &Config{
+		DefaultEngine: "copy",
+		Retention: &RetentionPolicy{
+			Keep:   20,
+			Within: "72h",
+		},
+	}
+
+	if err := Save(tmpDir, cfg); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Load and verify retention policy
+	loaded, err := Load(tmpDir)
+	if err != nil {
+		t.Fatalf("unexpected error loading: %v", err)
+	}
+	if loaded.Retention == nil {
+		t.Fatal("expected retention policy to be loaded")
+	}
+	if loaded.Retention.Keep != 20 {
+		t.Errorf("expected Keep=20, got %d", loaded.Retention.Keep)
+	}
+	if loaded.Retention.Within != "72h" {
+		t.Errorf("expected Within=72h, got %s", loaded.Retention.Within)
+	}
+}
+
+// TestConfig_Get_UnsetValues tests Get method with unset values.
+func TestConfig_Get_UnsetValues(t *testing.T) {
+	cfg := &Config{} // All fields unset
+
+	// Get unset default_engine should return empty
+	val, err := cfg.Get("default_engine")
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if val != "" {
+		t.Errorf("expected empty string, got %s", val)
+	}
+
+	// Get unset default_tags should return empty array representation
+	val, err = cfg.Get("default_tags")
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if val != "[]" {
+		t.Errorf("expected '[]', got %s", val)
+	}
+
+	// Get unset output_format should return empty
+	val, err = cfg.Get("output_format")
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if val != "" {
+		t.Errorf("expected empty string, got %s", val)
+	}
+
+	// Get unset progress_enabled should return empty
+	val, err = cfg.Get("progress_enabled")
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if val != "" {
+		t.Errorf("expected empty string, got %s", val)
+	}
+}
+
+// TestConfig_GetWithNilProgressEnabled tests Get when ProgressEnabled is nil.
+func TestConfig_GetWithNilProgressEnabled(t *testing.T) {
+	cfg := &Config{
+		DefaultEngine:   "copy",
+		ProgressEnabled: nil,
+	}
+
+	val, err := cfg.Get("progress_enabled")
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if val != "" {
+		t.Errorf("expected empty string for nil ProgressEnabled, got %s", val)
+	}
+}
+
+// TestConfig_SetInvalidValues tests Set with invalid values.
+func TestConfig_SetInvalidValues(t *testing.T) {
+	cfg := &Config{}
+
+	// Test invalid default_tags (not valid YAML list)
+	err := cfg.Set("default_tags", "not-a-list")
+	if err == nil {
+		t.Error("expected error for invalid default_tags format")
+	}
+
+	// Test invalid output_format (currently not validated by Set, but should be)
+	// This test documents current behavior
+	_ = cfg.Set("output_format", "xml")
+	if cfg.OutputFormat != "xml" {
+		t.Errorf("expected output_format to be set to xml, got %s", cfg.OutputFormat)
+	}
+
+	// Test unknown key
+	err = cfg.Set("unknown_key", "value")
+	if err == nil {
+		t.Error("expected error for unknown key")
+	}
+}
+
+// TestLoad_WithRetentionPolicy tests loading a config with retention policy.
+func TestLoad_WithRetentionPolicy(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "jvs-config-retention-load-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Create .jvs directory and config file
+	jvsDir := filepath.Join(tmpDir, ".jvs")
+	if err := os.MkdirAll(jvsDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	configContent := `
+default_engine: copy
+retention:
+  keep: 15
+  within: 30d
+`
+	configPath := filepath.Join(jvsDir, "config.yaml")
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, err := Load(tmpDir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.Retention == nil {
+		t.Fatal("expected retention policy to be loaded")
+	}
+	if cfg.Retention.Keep != 15 {
+		t.Errorf("expected Keep=15, got %d", cfg.Retention.Keep)
+	}
+	if cfg.Retention.Within != "30d" {
+		t.Errorf("expected Within=30d, got %s", cfg.Retention.Within)
+	}
+}
+
+// TestLoad_WithInvalidRetentionDuration tests loading with invalid duration.
+func TestLoad_WithInvalidRetentionDuration(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "jvs-config-invalid-retention-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Create .jvs directory and config file
+	jvsDir := filepath.Join(tmpDir, ".jvs")
+	if err := os.MkdirAll(jvsDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	configContent := `
+default_engine: copy
+retention:
+  keep: -5
+  within: "not-a-duration"
+`
+	configPath := filepath.Join(jvsDir, "config.yaml")
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Load should succeed (validation is on GetRetentionPolicy, not Load)
+	cfg, err := Load(tmpDir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// Getting the retention policy should use defaults for invalid values
+	policy := cfg.GetRetentionPolicy()
+	if policy.KeepMinAge == 0 {
+		t.Error("expected default KeepMinAge for invalid duration")
 	}
 }
