@@ -39,6 +39,36 @@ Compression can be enabled with --compress:
 
 Compression levels: none, fast, default, max
 
+Templates:
+  Use --template to apply a pre-configured snapshot pattern:
+  jvs snapshot --template pre-experiment
+  jvs snapshot --template checkpoint
+
+  Built-in templates:
+    - pre-experiment: "Before experiment: {datetime}" with tags: experiment, checkpoint
+    - pre-deploy: "Pre-deployment checkpoint: {datetime}" with tags: pre-deploy, release
+    - checkpoint: "Checkpoint: {datetime}" with tags: checkpoint
+    - work: "Work in progress: {datetime}" with tags: wip
+    - release: "Release: {datetime}" with tags: release, stable
+    - archive: "Archive: {datetime}" with tags: archive (compressed: max)
+
+  Template placeholders:
+    {date} - Current date (YYYY-MM-DD)
+    {time} - Current time (HH:MM:SS)
+    {datetime} - Current date and time
+    {iso8601} - ISO 8601 timestamp
+    {unix} - Unix timestamp
+    {user} - Username
+    {hostname} - Hostname
+    {arch} - Architecture (amd64, arm64, etc.)
+
+  Custom templates can be defined in .jvs/config.yaml:
+    snapshot_templates:
+      my-template:
+        note: "Custom: {datetime}"
+        tags: ["custom", "backup"]
+        compression: "fast"
+
 NOTE: Cannot create snapshots in detached state. Use 'jvs worktree fork'
 to create a new worktree from the current position first.`,
 	Args: cobra.MaximumNArgs(1),
@@ -67,7 +97,8 @@ to create a new worktree from the current position first.`,
 			os.Exit(1)
 		}
 
-		note := ""
+		// Determine note from args, template, or prompt
+		var note string
 		if len(args) > 0 {
 			note = args[0]
 		}
@@ -75,8 +106,43 @@ to create a new worktree from the current position first.`,
 		// Load config for default tags
 		jvsCfg, _ := config.Load(r.Root)
 
+		// Apply template if specified
+		allTags := snapshotTags
+		if snapshotTemplate != "" {
+			tmpl := config.ResolveTemplate(r.Root, snapshotTemplate)
+			if tmpl == nil {
+				fmtErr("unknown template: %s", snapshotTemplate)
+				fmt.Println()
+				fmt.Println("Available templates:")
+				for _, name := range config.ListTemplates(r.Root) {
+					fmt.Printf("  - %s\n", name)
+				}
+				os.Exit(1)
+			}
+
+			// Use template note if no note provided
+			if note == "" && tmpl.Note != "" {
+				note = template.Expand(tmpl.Note, nil)
+			}
+
+			// Add template tags if none specified
+			if len(snapshotTags) == 0 && len(tmpl.Tags) > 0 {
+				allTags = tmpl.Tags
+			}
+
+			// Use template compression if specified and none on command line
+			if tmpl.Compression != "" && snapshotCompression == "" {
+				snapshotCompression = tmpl.Compression
+			}
+
+			// Use template paths if specified and none on command line
+			if len(tmpl.Paths) > 0 && len(snapshotPaths) == 0 {
+				snapshotPaths = tmpl.Paths
+			}
+		}
+
 		// Validate tags
-		for _, tag := range snapshotTags {
+		for _, tag := range allTags {
 			if err := pathutil.ValidateTag(tag); err != nil {
 				fmtErr("invalid tag %q: %v", tag, err)
 				os.Exit(1)
@@ -84,7 +150,6 @@ to create a new worktree from the current position first.`,
 		}
 
 		// Combine command-line tags with default tags from config
-		allTags := snapshotTags
 		if defaultTags := jvsCfg.GetDefaultTags(); len(defaultTags) > 0 {
 			// Add default tags that aren't already specified
 			tagMap := make(map[string]bool)
@@ -149,5 +214,6 @@ func init() {
 	snapshotCmd.Flags().StringSliceVar(&snapshotTags, "tag", []string{}, "tag for this snapshot (can be repeated)")
 	snapshotCmd.Flags().StringSliceVar(&snapshotPaths, "paths", []string{}, "paths to include in partial snapshot")
 	snapshotCmd.Flags().StringVar(&snapshotCompression, "compress", "", "compression level (none, fast, default, max)")
+	snapshotCmd.Flags().StringVar(&snapshotTemplate, "template", "", "snapshot template to apply (pre-experiment, pre-deploy, checkpoint, work, release, archive)")
 	rootCmd.AddCommand(snapshotCmd)
 }

@@ -27,6 +27,29 @@ JVS versions full workspaces as snapshots and provides navigable, verifiable, ta
 
 ## Installation
 
+### Docker (Recommended for isolated environments)
+
+```bash
+docker pull ghcr.io/jvs-project/jvs:latest
+
+# Run JVS commands
+docker run --rm -v "$(pwd)/workspace:/workspace" ghcr.io/jvs-project/jvs init myrepo
+docker run --rm -v "$(pwd)/workspace:/workspace" ghcr.io/jvs-project/jvs snapshot "initial"
+```
+
+See [Docker Guide](docs/DOCKER.md) for details.
+
+### Homebrew (macOS & Linux)
+
+```bash
+brew tap jvs-project/jvs
+brew install jvs
+```
+
+See [Homebrew Installation Guide](docs/HOMEBREW.md) for details.
+
+### From Source
+
 ```bash
 git clone https://github.com/jvs-project/jvs.git
 cd jvs
