@@ -472,6 +472,10 @@ func createTestRootCmd() *cobra.Command {
 	historyNoteFilter = ""
 	historyTagFilter = ""
 	historyAll = false
+	snapshotTags = nil
+	snapshotPaths = nil
+	snapshotCompression = ""
+	restoreInteractive = false
 
 	// Create a new root command
 	cmd := &cobra.Command{
