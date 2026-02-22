@@ -56,6 +56,13 @@ go test -fuzz=FuzzValidateName -fuzztime=1m ./test/fuzz/... -test.fuzzcachedir=/
 | `FuzzCanonicalMarshal` | `jsonutil.CanonicalMarshal` | JSON canonicalization |
 | `FuzzDescriptorJSON` | `model.Descriptor` | Descriptor JSON marshaling/unmarshaling |
 | `FuzzSnapshotIDString` | `model.SnapshotID.String()` | Snapshot ID string conversion |
+| `FuzzDescriptorMalformedJSON` | `model.Descriptor` | Malformed descriptor handling |
+| `FuzzReadyMarkerJSON` | `model.ReadyMarker` | ReadyMarker JSON parsing |
+| `FuzzIntentRecordJSON` | `model.IntentRecord` | IntentRecord JSON parsing |
+| `FuzzCompressionInfoJSON` | `model.CompressionInfo` | CompressionInfo JSON parsing |
+| `FuzzPartialPaths` | Path validation | Partial snapshot path validation |
+| `FuzzTagValue` | Tag validation | Tag value validation |
+| `FuzzDescriptorChecksum` | Descriptor checksum | Descriptor checksum consistency |
 
 ## Understanding Fuzz Test Output
 
