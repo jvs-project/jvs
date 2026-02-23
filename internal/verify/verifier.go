@@ -1,3 +1,4 @@
+// Package verify provides snapshot integrity verification.
 package verify
 
 import (

@@ -106,7 +106,7 @@ jvs snapshot "Added more content"
 jvs history
 
 # Output:
-# SNAPSHOt ID   TIMESTAMP         NOTE                TAGS
+# SNAPSHOT ID   TIMESTAMP         NOTE                TAGS
 # 01efgh...     2026-02-23 12:05  Added more content
 # 01abcd...     2026-02-23 12:00  Initial setup
 ```

@@ -1,3 +1,4 @@
+// Package repo handles JVS repository initialization and discovery.
 package repo
 
 import (
@@ -16,10 +17,14 @@ import (
 )
 
 const (
-	FormatVersion    = 1
-	JVSDirName       = ".jvs"
+	// FormatVersion is the current repository format version.
+	FormatVersion = 1
+	// JVSDirName is the name of the JVS metadata directory.
+	JVSDirName = ".jvs"
+	// FormatVersionFile is the name of the file storing the format version.
 	FormatVersionFile = "format_version"
-	RepoIDFile       = "repo_id"
+	// RepoIDFile is the name of the file storing the repository ID.
+	RepoIDFile = "repo_id"
 )
 
 // Repo represents an initialized JVS repository.

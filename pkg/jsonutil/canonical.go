@@ -1,3 +1,4 @@
+// Package jsonutil provides deterministic JSON marshaling.
 package jsonutil
 
 import (

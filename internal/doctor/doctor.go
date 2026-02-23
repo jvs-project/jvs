@@ -1,3 +1,4 @@
+// Package doctor provides repository health checking and repair operations.
 package doctor
 
 import (

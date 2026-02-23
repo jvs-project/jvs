@@ -1,3 +1,4 @@
+// Package pathutil provides path and name validation utilities for JVS.
 package pathutil
 
 import (

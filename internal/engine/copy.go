@@ -12,6 +12,8 @@ import (
 )
 
 // CopyEngine performs a full recursive copy of directories.
+// This is the fallback engine that works on any filesystem but does not
+// preserve hardlinks (they become separate copies).
 type CopyEngine struct{}
 
 // NewCopyEngine creates a new CopyEngine.
@@ -25,6 +27,7 @@ func (e *CopyEngine) Name() model.EngineType {
 }
 
 // Clone recursively copies src to dst.
+// Returns a degraded result if hardlinks were detected (they become separate copies).
 func (e *CopyEngine) Clone(src, dst string) (*CloneResult, error) {
 	result := &CloneResult{}
 

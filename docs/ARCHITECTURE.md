@@ -454,12 +454,12 @@ Where `n` is payload size and `m` is number of snapshots.
 ## Related Documents
 
 - [CONSTITUTION.md](CONSTITUTION.md) - Core principles and non-goals
-- [00_OVERVIEW.md](docs/00_OVERVIEW.md) - Frozen design decisions
-- [01_REPO_LAYOUT_SPEC.md](docs/01_REPO_LAYOUT_SPEC.md) - On-disk structure
-- [02_CLI_SPEC.md](docs/02_CLI_SPEC.md) - Command contract
-- [05_SNAPSHOT_ENGINE_SPEC.md](docs/05_SNAPSHOT_ENGINE_SPEC.md) - Engine details
-- [09_SECURITY_MODEL.md](docs/09_SECURITY_MODEL.md) - Integrity and audit
-- [10_THREAT_MODEL.md](docs/10_THREAT_MODEL.md) - Threat analysis
+- [00_OVERVIEW.md](00_OVERVIEW.md) - Frozen design decisions
+- [01_REPO_LAYOUT_SPEC.md](01_REPO_LAYOUT_SPEC.md) - On-disk structure
+- [02_CLI_SPEC.md](02_CLI_SPEC.md) - Command contract
+- [05_SNAPSHOT_ENGINE_SPEC.md](05_SNAPSHOT_ENGINE_SPEC.md) - Engine details
+- [09_SECURITY_MODEL.md](09_SECURITY_MODEL.md) - Integrity and audit
+- [10_THREAT_MODEL.md](10_THREAT_MODEL.md) - Threat analysis
 
 ---
 

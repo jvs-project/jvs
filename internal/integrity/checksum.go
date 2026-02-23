@@ -1,3 +1,4 @@
+// Package integrity provides checksum and payload hash computation for snapshots.
 package integrity
 
 import (

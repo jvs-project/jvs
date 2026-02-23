@@ -1,4 +1,5 @@
 // Package logging provides structured logging for JVS.
+// It supports multiple log levels and field-based logging.
 package logging
 
 import (

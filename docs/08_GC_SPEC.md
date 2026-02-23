@@ -1,4 +1,4 @@
-# GC Spec (v6.4)
+# GC Spec (v7.0)
 
 ## Goal
 Control snapshot storage growth without breaking recoverability.

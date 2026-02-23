@@ -1,3 +1,4 @@
+// Package snapshot handles snapshot creation, listing, and querying.
 package snapshot
 
 import (
@@ -18,7 +19,7 @@ import (
 	"github.com/jvs-project/jvs/pkg/model"
 )
 
-// Creator handles snapshot creation.
+// Creator handles snapshot creation using the 12-step protocol.
 type Creator struct {
 	repoRoot       string
 	engineType     model.EngineType

@@ -2,7 +2,8 @@ package errclass
 
 import "fmt"
 
-// JVSError is a stable, machine-readable error class.
+// JVSError is a stable, machine-readable error class for JVS operations.
+// It implements the error interface and supports error comparison via Is().
 type JVSError struct {
 	Code    string
 	Message string

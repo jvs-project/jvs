@@ -1,3 +1,5 @@
+// Package engine provides snapshot engines for copying worktree data.
+// Engines support different cloning strategies: juicefs-clone, reflink-copy, and copy.
 package engine
 
 import (

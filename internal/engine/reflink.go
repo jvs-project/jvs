@@ -12,6 +12,7 @@ import (
 )
 
 // ReflinkEngine performs reflink-based copy (O(1) CoW) on supported filesystems.
+// Falls back to regular copy for files that cannot be reflinked.
 type ReflinkEngine struct {
 	CopyEngine *CopyEngine // Fallback for unsupported cases
 }
@@ -29,6 +30,7 @@ func (e *ReflinkEngine) Name() model.EngineType {
 }
 
 // Clone performs a reflink copy if supported, falls back to regular copy otherwise.
+// Returns a degraded result if any files could not be reflinked.
 func (e *ReflinkEngine) Clone(src, dst string) (*CloneResult, error) {
 	result := &CloneResult{}
 
@@ -102,7 +104,7 @@ func (e *ReflinkEngine) reflinkFile(src, dst string, info os.FileInfo) error {
 	if errno != 0 {
 		dstFile.Close()
 		os.Remove(dst)
-		return fmt.Errorf("FICLONE failed: %v", errno)
+		return fmt.Errorf("ficlone failed: %v", errno)
 	}
 
 	// Preserve mod time

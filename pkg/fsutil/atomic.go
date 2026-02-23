@@ -1,3 +1,4 @@
+// Package fsutil provides filesystem utilities for atomic operations and syncing.
 package fsutil
 
 import (

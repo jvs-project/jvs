@@ -1,3 +1,4 @@
+// Package worktree provides worktree management operations.
 package worktree
 
 import (

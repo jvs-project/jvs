@@ -1,3 +1,5 @@
+// Package color provides terminal color output support for JVS.
+// It respects the NO_COLOR environment variable (https://no-color.org/).
 package color
 
 import (

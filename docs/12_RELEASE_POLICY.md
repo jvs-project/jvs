@@ -1,4 +1,4 @@
-# Release Policy (v6.3)
+# Release Policy (v7.0)
 
 ## Versioning
 - major: incompatible storage/model semantics

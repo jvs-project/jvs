@@ -1,3 +1,4 @@
+// Package gc provides garbage collection for snapshots.
 package gc
 
 import (
@@ -16,7 +17,7 @@ import (
 	"github.com/jvs-project/jvs/pkg/uuidutil"
 )
 
-// Collector handles garbage collection.
+// Collector handles garbage collection of unused snapshots.
 type Collector struct {
 	repoRoot       string
 	auditLogger    *audit.FileAppender

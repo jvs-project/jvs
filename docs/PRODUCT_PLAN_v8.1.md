@@ -138,7 +138,7 @@ Define stable schemas for all JSON outputs.
       "properties": {
         "code": {
           "type": "string",
-          "description": "Machine-readable error code (e.g., 'E_LOCK_CONFLICT')"
+          "description": "Machine-readable error code (e.g., 'E_NAME_INVALID')"
         },
         "message": {
           "type": "string",

@@ -1,3 +1,4 @@
+// Package restore handles snapshot restore operations.
 package restore
 
 import (

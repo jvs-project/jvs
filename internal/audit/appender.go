@@ -1,3 +1,4 @@
+// Package audit provides audit logging with hash chain verification.
 package audit
 
 import (

@@ -11,6 +11,8 @@ import (
 )
 
 // JuiceFSEngine performs clone using `juicefs clone` command.
+// When juicefs is unavailable or the source is not on JuiceFS,
+// it falls back to the copy engine.
 type JuiceFSEngine struct {
 	CopyEngine *CopyEngine // Fallback
 }
@@ -28,6 +30,7 @@ func (e *JuiceFSEngine) Name() model.EngineType {
 }
 
 // Clone performs a juicefs clone if available, falls back to copy otherwise.
+// Returns a degraded result if juicefs is not available or not on JuiceFS.
 func (e *JuiceFSEngine) Clone(src, dst string) (*CloneResult, error) {
 	// Check if juicefs command is available
 	if !e.isJuiceFSAvailable() {
@@ -119,7 +122,8 @@ func (e *JuiceFSEngine) isOnJuiceFS(path string) bool {
 	return bestMount != ""
 }
 
-// Engine detection function
+// DetectEngine auto-detects the best available engine for the given repository.
+// Detection order: juicefs-clone (if on JuiceFS), reflink-copy (if supported), copy.
 func DetectEngine(repoRoot string) (Engine, error) {
 	// Check environment variable first
 	if engineType := os.Getenv("JVS_ENGINE"); engineType != "" {
