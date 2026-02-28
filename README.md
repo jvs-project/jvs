@@ -126,12 +126,6 @@ jvs verify --all
 Use `juicefs sync` and exclude runtime state (active `.jvs/intents`).
 See `docs/18_MIGRATION_AND_BACKUP.md`.
 
-## Upgrading JVS
-See [UPGRADE.md](UPGRADE.md) for upgrade guides between versions, including:
-- v6.x to v7.0 migration (detached state model)
-- Backup recommendations
-- Post-upgrade verification steps
-
 **Spec version:** v8.1 (2026-02-28)
 
 ## Recent Changes

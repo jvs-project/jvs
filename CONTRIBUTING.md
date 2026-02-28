@@ -338,7 +338,6 @@ Before modifying behavior, review the relevant spec:
 
 - **GitHub Issues**: Use [Issues](https://github.com/jvs-project/jvs/issues) for bugs and feature requests
 - **Discussions**: Use [Discussions](https://github.com/jvs-project/jvs/discussions) for questions and ideas
-- **Team Charter**: See [docs/TEAM_CHARTER.md](docs/TEAM_CHARTER.md) for team structure
 
 ## License
 

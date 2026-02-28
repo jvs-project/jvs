@@ -1,7 +1,5 @@
 # Migration & Backup (v7.0)
 
-**Note:** For upgrading between JVS versions, see [UPGRADE.md](../UPGRADE.md).
-
 JVS does not provide remote replication. Use JuiceFS replication tools.
 
 ## Recommended method

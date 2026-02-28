@@ -632,14 +632,11 @@ See [CONTRIBUTING.md](../CONTRIBUTING.md) for details.
 
 ## Future
 
-### What's planned for v8.0?
+### What's the current roadmap?
 
-See [ROADMAP.md](../ROADMAP.md) for v8.0 candidates:
-- Remote sync helpers
-- Snapshot templates
-- And more...
-
-**Partial snapshots are now available!** See [How do I create a partial snapshot?](#how-do-i-create-a-partial-snapshot) below.
+See the [changelog](docs/99_CHANGELOG.md) for recent releases. Current focus areas:
+- Integration with agentsmith platform
+- Performance optimization for large workspaces
 
 ---
 

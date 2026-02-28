@@ -10,7 +10,7 @@ This is a **specification + implementation repository** for JVS (Juicy Versioned
 
 JVS is a **snapshot-first, filesystem-native versioning layer** (not a Git replacement):
 
-- **Control Plane vs Data Plane Separation**: `.jvs/` holds all metadata (snapshots, descriptors, locks, worktree config); worktree directories contain pure payload
+- **Control Plane vs Data Plane Separation**: `.jvs/` holds all metadata (snapshots, descriptors, worktree config); worktree directories contain pure payload
 - **Main worktree at `repo/main/`**: The repo root is NOT the workspace - `repo/main/` is the primary payload root
 - **Real directories, no virtualization**: Worktrees are actual filesystem directories; users switch via `cd`, not commands
 - **No remote/push/pull**: JuiceFS handles transport; JVS only versions local workspaces

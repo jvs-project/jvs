@@ -1,5 +1,4 @@
 //go:build conformance
-// +build conformance
 
 // Regression Test Suite for JVS
 //

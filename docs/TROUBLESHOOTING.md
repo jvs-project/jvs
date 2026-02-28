@@ -577,7 +577,6 @@ jvs doctor --strict --repair-runtime
 
 - [README.md](../README.md) - Overview and quickstart
 - [13_OPERATION_RUNBOOK.md](13_OPERATION_RUNBOOK.md) - Operations guide
-- [UPGRADE.md](../UPGRADE.md) - Upgrade guide
 - [SECURITY.md](../SECURITY.md) - Security policy
 
 ---
