@@ -126,11 +126,11 @@ jvs verify --all
 Use `juicefs sync` and exclude runtime state (active `.jvs/intents`).
 See `docs/18_MIGRATION_AND_BACKUP.md`.
 
-**Spec version:** v8.1 (2026-02-28)
+**Spec version:** v8.2 (2026-02-28)
 
 ## Recent Changes
-- **v8.1**: Removed Docker, Kubernetes operator, and Terraform provider infrastructure. JVS is a local CLI tool — container orchestration belongs in the consumer (agentsmith).
+- **v8.2**: Housekeeping — removed 9,200+ lines of orphaned infrastructure, aspirational docs, and dead references.
+- **v8.1**: Removed Docker, Kubernetes operator, and Terraform provider infrastructure.
 - **v8.0**: Production hardening — 7 critical bug fixes, 30+ new tests, release gate infrastructure.
-- **v7.2**: KISS simplification — removed ~900 lines of unused code.
 
 See [CHANGELOG.md](docs/99_CHANGELOG.md) for full history.

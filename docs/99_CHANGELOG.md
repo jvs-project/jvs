@@ -1,5 +1,34 @@
 # Changelog
 
+## v8.2 — 2026-02-28
+
+### Housekeeping: remove stale artifacts and aspirational docs
+
+Continued the YAGNI cleanup from v8.1. Removed 9,200+ lines of orphaned infrastructure, aspirational documentation, and dead cross-references that accumulated during earlier development phases.
+
+### Removed
+
+- **Homebrew tap**: `homebrew-tap/` directory and `docs/HOMEBREW.md`. Release workflow was already removed in v8.1; the tap formula and scripts were orphaned.
+- **Ansible role**: `ansible-role-jvs/` directory. Deployment automation for a local CLI tool is over-engineering.
+- **GitHub Action**: `.github/actions/jvs-snapshot/`. No consuming workflows exist.
+- **VS Code extension**: `vscode-extension/` directory. A 647-line aspirational TypeScript extension that was never published; if needed, it belongs in its own repo.
+- **Aspirational governance docs**: `GOVERNANCE.md`, `ROADMAP.md`, `UPGRADE.md` — project governance artifacts for a single-maintainer CLI tool.
+- **Fictional/marketing docs**: `CNCF_SANDBOX_APPLICATION.md`, `CII_BADGE_ASSESSMENT.md`, `CASE_STUDIES.md`, `VIDEO_TUTORIALS.md`, `TEAM_CHARTER.md`.
+- **Completed planning docs**: 3 duplicate v8.0 development plans, `PRODUCT_PLAN_v8.1.md`, `PRODUCT_REPORT_v8.1.md`, `CODE_REVIEW_SIMPLIFICATION.md`, `FEATURE_SCOPE_REFINEMENTS.md`, v7.0 comprehensive fixes design.
+
+### Fixed
+
+- `CLAUDE.md`: removed stale "locks" reference in control plane description (locks removed in v6.7).
+- `regression_test.go`: removed redundant `// +build` tag (Go 1.17+ only needs `//go:build`).
+- Fixed dangling cross-references to removed files in README, FAQ, TROUBLESHOOTING, CONTRIBUTING, quickstart guides, and MIGRATION_AND_BACKUP.
+- Added `internal/cli/test-debug-flag/` to `.gitignore`.
+
+### What remains
+
+Core specs (00–18), CONSTITUTION, ARCHITECTURE, BENCHMARKS, PERFORMANCE, quickstart guides, TEMPLATES, EXAMPLES, FAQ, TROUBLESHOOTING, API_DOCUMENTATION, SIGNING, SOURCES, TARGET_USERS, SECURITY, CONTRIBUTING, CODE_OF_CONDUCT, and original implementation design/plan documents.
+
+---
+
 ## v8.1 — 2026-02-28
 
 ### YAGNI: Remove Docker, Kubernetes operator, and Terraform provider
