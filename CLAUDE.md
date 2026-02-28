@@ -27,7 +27,6 @@ JVS is a **snapshot-first, filesystem-native versioning layer** (not a Git repla
 | `04_SNAPSHOT_SCOPE_AND_LINEAGE_SPEC.md` | Snapshot identity, descriptor schema, lineage chain |
 | `05_SNAPSHOT_ENGINE_SPEC.md` | Engine selection (juicefs-clone/reflink-copy/copy), READY protocol, payload hash |
 | `06_RESTORE_SPEC.md` | Restore command with detached state model |
-| `07_LOCKING_AND_CONSISTENCY_SPEC.md` | SWMR, fencing tokens, clock skew handling |
 | `14_TRACEABILITY_MATRIX.md` | Maps product promises to normative specs to conformance tests |
 
 ## Key Design Principles
@@ -55,7 +54,7 @@ Do not propose features for:
 - **MUST**: Required behavior; conformance tests validate
 - **MUST NOT**: Prohibited behavior
 - **SHOULD**: Recommended; valid reasons may exist to deviate
-- Error classes (e.g., `E_LOCK_CONFLICT`, `E_FENCING_MISMATCH`) are stable and machine-readable
+- Error classes (e.g., `E_SNAPSHOT_NOT_FOUND`, `E_FORMAT_UNSUPPORTED`) are stable and machine-readable
 
 ## When Modifying Specifications
 

@@ -30,17 +30,6 @@ issues:
     - linters:
         - gosec
       text: "G104"
-    - path: "controllers/"
-      linters:
-        - gocyclo
-    - path: "_deepcopy\\.go$"
-      linters:
-        - gosimple
-        - staticcheck
-    - path: "api/"
-      linters:
-        - gosimple
-        - staticcheck
   max-issues-per-linter: 0
   max-same-issues: 0
 

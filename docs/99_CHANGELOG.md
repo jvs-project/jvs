@@ -1,5 +1,32 @@
 # Changelog
 
+## v8.1 — 2026-02-28
+
+### YAGNI: Remove Docker, Kubernetes operator, and Terraform provider
+
+JVS is a local CLI tool. Container orchestration, Kubernetes CRDs, and Terraform state management belong in the consumer (agentsmith), not in the versioning tool itself.
+
+### Removed
+
+- **Docker infrastructure**: `Dockerfile`, `.dockerignore`, `docker-compose.yml`, `.github/workflows/docker.yml`, `docs/DOCKER.md`. Running a local filesystem tool inside a container adds complexity (FUSE mounts, bind mounts, privileged mode) for no benefit.
+- **Kubernetes operator**: `controllers/`, `api/v1alpha1/`, `cmd/jvs-operator/`, `config/` (CRDs, RBAC, deployment manifests), `Makefile.operator`, `docs/OPERATOR.md`. Skeleton code that was never functional; workspace lifecycle belongs in the platform layer.
+- **Terraform provider**: `terraform-provider-jvs/` (entire module), `docs/TERRAFORM.md`. JVS repos are created by `jvs init`, not by infrastructure-as-code tools.
+- **241 dependency lines removed** from `go.mod`/`go.sum` (k8s.io/apimachinery, k8s.io/client-go, sigs.k8s.io/controller-runtime, and transitive deps).
+
+### Rationale
+
+Following the KISS and YAGNI principles established in v7.2:
+1. A local CLI tool should not ship container images — nobody runs `git` in Docker to manage host repos.
+2. If a Kubernetes operator is needed in the future, it should live in its own repository with its own release cycle.
+3. The Terraform provider duplicated `jvs init`/`jvs snapshot` as HCL resources with no added value.
+4. Removing 50+ files and 241 dependency lines reduces attack surface, build time, and cognitive overhead.
+
+### Migration from v8.0
+
+**No breaking changes to the CLI or library API.** If you were using the Docker image, install the `jvs` binary directly. If you were using the Kubernetes operator or Terraform provider, they were never released as stable features.
+
+---
+
 ## v8.0 — 2026-02-28
 
 ### Production hardening release

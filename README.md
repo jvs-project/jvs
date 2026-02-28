@@ -27,37 +27,13 @@ JVS versions full workspaces as snapshots and provides navigable, verifiable, ta
 
 ## Installation
 
-### Docker (Recommended for isolated environments)
-
-```bash
-# From Docker Hub
-docker pull jvsproject/jvs:latest
-
-# From GitHub Container Registry
-docker pull ghcr.io/jvs-project/jvs:latest
-
-# Run JVS commands
-docker run --rm -v "$(pwd)/workspace:/workspace" jvsproject/jvs init myrepo
-docker run --rm -v "$(pwd)/workspace:/workspace" jvsproject/jvs snapshot "initial"
-```
-
-See [Docker Guide](docs/DOCKER.md) for details on JuiceFS integration, FUSE support, and multi-platform usage.
-
-### Homebrew (macOS & Linux)
-
-```bash
-brew tap jvs-project/jvs
-brew install jvs
-```
-
-See [Homebrew Installation Guide](docs/HOMEBREW.md) for details.
-
 ### From Source
 
 ```bash
 git clone https://github.com/jvs-project/jvs.git
 cd jvs
 make build
+# binary is at bin/jvs
 ```
 
 ## Quickstart
@@ -156,7 +132,11 @@ See [UPGRADE.md](UPGRADE.md) for upgrade guides between versions, including:
 - Backup recommendations
 - Post-upgrade verification steps
 
-**Spec version:** v7.2 (2026-02-23)
+**Spec version:** v8.1 (2026-02-28)
 
-## Recent Changes (v7.2)
-KISS simplification: Removed ~900 lines of unused code (webhooks, metrics, templates). Focus on core value: O(1) snapshots for large files. See [CHANGELOG.md](docs/99_CHANGELOG.md).
+## Recent Changes
+- **v8.1**: Removed Docker, Kubernetes operator, and Terraform provider infrastructure. JVS is a local CLI tool — container orchestration belongs in the consumer (agentsmith).
+- **v8.0**: Production hardening — 7 critical bug fixes, 30+ new tests, release gate infrastructure.
+- **v7.2**: KISS simplification — removed ~900 lines of unused code.
+
+See [CHANGELOG.md](docs/99_CHANGELOG.md) for full history.
