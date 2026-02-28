@@ -24,12 +24,8 @@ var infoCmd = &cobra.Command{
 		entries, _ := os.ReadDir(snapshotsDir)
 		snapshotCount := len(entries)
 
-		// Detect engine
 		eng, _ := engine.DetectEngine(r.Root)
-		snapshotEngine := "copy"
-		if eng != nil {
-			snapshotEngine = string(eng.Name())
-		}
+		snapshotEngine := string(eng.Name())
 
 		info := map[string]any{
 			"repo_root":       r.Root,
