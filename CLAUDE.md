@@ -65,6 +65,36 @@ Do not propose features for:
 4. Increment version number in affected specs and 00_OVERVIEW.md
 5. Update 99_CHANGELOG.md with changes
 
+## Build & Test
+
+| Command | Purpose |
+|---------|---------|
+| `make build` | Build `bin/jvs` binary |
+| `make test` | Unit tests (`internal/` + `pkg/`) |
+| `make test-race` | Unit tests with Go race detector |
+| `make test-cover` | Unit tests with coverage report; fails if total < 60% |
+| `make lint` | golangci-lint |
+| `make conformance` | E2E conformance tests (requires built binary) |
+| `make fuzz` | Fuzzing tests (10s per target) |
+| `make integration` | Build + conformance |
+| `make release-gate` | **Full pre-release gate**: test-race, test-cover, lint, build, conformance, fuzz |
+| `make clean` | Remove build artifacts and reports |
+
+### Testing Conventions
+
+- **Unit tests** live next to source files (`*_test.go`). Use `testify/require` for setup, `testify/assert` for assertions.
+- **Conformance tests** are in `test/conformance/` with build tag `conformance`. They invoke the `bin/jvs` binary as a black-box.
+- **Regression tests** are in `test/regression/`. Each test documents the bug, fix date, and scenario.
+- **Fuzz tests** are in `test/fuzz/`.
+- **Stress tests** are in `test/stress/`.
+- All tests MUST pass with `-race` flag. Use `atomic` or `sync` primitives for shared state.
+- Error paths MUST be tested, not just happy paths.
+- Coverage target: 60% minimum (enforced by `make test-cover`). Current baseline: ~80%.
+
+### Pre-Merge Gate
+
+Before merging any change, run `make release-gate`. This satisfies the release gates defined in `docs/12_RELEASE_POLICY.md`.
+
 ## CLI Commands (from 02_CLI_SPEC.md)
 
 Key commands for reference:

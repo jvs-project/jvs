@@ -7,55 +7,57 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 )
 
 // colorState holds the global color configuration.
 var (
 	state struct {
-		enabled  bool
-		once     sync.Once
-		disabled bool
+		enabled    atomic.Bool
+		overridden atomic.Bool
+		once       sync.Once
 	}
 )
 
 // Init initializes the color system based on environment and flags.
 // It respects the NO_COLOR environment variable (https://no-color.org/)
-// and can be disabled programmatically.
+// and can be disabled programmatically. Does not override explicit
+// Enable()/Disable() calls.
 func Init(noColorFlag bool) {
 	state.once.Do(func() {
-		// Check NO_COLOR environment variable
+		if state.overridden.Load() {
+			return
+		}
+		disabled := false
 		if _, exists := os.LookupEnv("NO_COLOR"); exists {
-			state.disabled = true
+			disabled = true
 		}
-		// Check if we're in a dumb terminal
 		if term := os.Getenv("TERM"); term == "dumb" {
-			state.disabled = true
+			disabled = true
 		}
-		// Check explicit flag
 		if noColorFlag {
-			state.disabled = true
+			disabled = true
 		}
-		// Enable colors if not explicitly disabled
-		state.enabled = !state.disabled
+		state.enabled.Store(!disabled)
 	})
 }
 
 // Enabled returns true if color output is enabled.
 func Enabled() bool {
-	Init(false) // Ensure initialized
-	return state.enabled
+	Init(false)
+	return state.enabled.Load()
 }
 
 // Disable turns off color output.
 func Disable() {
-	state.disabled = true
-	state.enabled = false
+	state.overridden.Store(true)
+	state.enabled.Store(false)
 }
 
 // Enable turns on color output.
 func Enable() {
-	state.disabled = false
-	state.enabled = true
+	state.overridden.Store(true)
+	state.enabled.Store(true)
 }
 
 // ANSI color codes

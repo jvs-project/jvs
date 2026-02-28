@@ -3,10 +3,14 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/jvs-project/jvs/internal/repo"
 	"github.com/jvs-project/jvs/pkg/model"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestDefault(t *testing.T) {
@@ -784,4 +788,70 @@ retention:
 	if policy.KeepMinAge == 0 {
 		t.Error("expected default KeepMinAge for invalid duration")
 	}
+}
+
+func TestLoad_CorruptedYAML(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	_, err := repo.Init(tmpDir, "test-repo")
+	require.NoError(t, err)
+
+	cfgPath := filepath.Join(tmpDir, ".jvs", "config.yaml")
+	err = os.WriteFile(cfgPath, []byte("{{{{not: valid: yaml: \x00\xff"), 0644)
+	require.NoError(t, err)
+
+	InvalidateCache(tmpDir)
+
+	_, err = Load(tmpDir)
+	assert.Error(t, err)
+}
+
+func TestLoad_ConcurrentAccess(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	_, err := repo.Init(tmpDir, "test-repo")
+	require.NoError(t, err)
+
+	cfgPath := filepath.Join(tmpDir, ".jvs", "config.yaml")
+	err = os.WriteFile(cfgPath, []byte("default_engine: copy\noutput_format: json\n"), 0644)
+	require.NoError(t, err)
+
+	InvalidateCache(tmpDir)
+
+	var wg sync.WaitGroup
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			cfg, loadErr := Load(tmpDir)
+			assert.NoError(t, loadErr)
+			assert.NotNil(t, cfg)
+		}()
+	}
+	wg.Wait()
+}
+
+func TestLoad_CacheCopyIndependence(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	_, err := repo.Init(tmpDir, "test-repo")
+	require.NoError(t, err)
+
+	cfgPath := filepath.Join(tmpDir, ".jvs", "config.yaml")
+	err = os.WriteFile(cfgPath, []byte("default_engine: copy\noutput_format: json\n"), 0644)
+	require.NoError(t, err)
+
+	InvalidateCache(tmpDir)
+
+	cfg1, err := Load(tmpDir)
+	require.NoError(t, err)
+	require.Equal(t, model.EngineType("copy"), cfg1.DefaultEngine)
+
+	cfg1.DefaultEngine = "reflink-copy"
+	cfg1.OutputFormat = "text"
+
+	cfg2, err := Load(tmpDir)
+	require.NoError(t, err)
+	assert.Equal(t, model.EngineType("copy"), cfg2.DefaultEngine, "cache should not be mutated by modifying a returned copy")
+	assert.Equal(t, "json", cfg2.OutputFormat, "cache should not be mutated by modifying a returned copy")
 }

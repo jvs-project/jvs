@@ -12,8 +12,8 @@ import (
 
 // ComputeDescriptorChecksum computes SHA-256 checksum of the descriptor.
 // Excludes: descriptor_checksum, integrity_state (per spec 04)
+// Includes all other fields to ensure tamper detection.
 func ComputeDescriptorChecksum(desc *model.Descriptor) (model.HashValue, error) {
-	// Create copy with excluded fields zeroed
 	checksumDesc := &model.Descriptor{
 		SnapshotID:      desc.SnapshotID,
 		ParentID:        desc.ParentID,
@@ -23,6 +23,8 @@ func ComputeDescriptorChecksum(desc *model.Descriptor) (model.HashValue, error) 
 		Tags:            desc.Tags,
 		Engine:          desc.Engine,
 		PayloadRootHash: desc.PayloadRootHash,
+		PartialPaths:    desc.PartialPaths,
+		Compression:     desc.Compression,
 		// DescriptorChecksum: excluded
 		// IntegrityState: excluded
 	}

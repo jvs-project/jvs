@@ -7,9 +7,9 @@
 
 ## Release gates (MUST)
 Before release tag:
-1. `jvs doctor --strict` passes
-2. `jvs verify --all` passes (checksum + payload hash)
-3. `jvs conformance run --profile release` passes
+1. `make release-gate` passes (runs test-race, test-cover, lint, build, conformance, fuzz)
+2. `jvs doctor --strict` passes on a representative repository
+3. `jvs verify --all` passes (checksum + payload hash)
 4. threat model residual risks reviewed
 5. changelog complete and date-ordered
 

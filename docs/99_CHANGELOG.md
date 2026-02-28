@@ -1,5 +1,55 @@
 # Changelog
 
+## v8.0 — 2026-02-28
+
+### Production hardening release
+
+This release focuses on stability, correctness, and testing infrastructure ahead of agentsmith integration. No new user-facing features; all changes improve reliability of existing behavior.
+
+### Critical bug fixes
+
+- **CanSnapshot blocked first snapshot** (`pkg/model/worktree.go`): `CanSnapshot()` returned false for new worktrees with no snapshots, making it impossible to create the initial snapshot on a fresh worktree.
+- **Descriptor checksum excluded fields** (`internal/integrity/checksum.go`): `PartialPaths` and `Compression` fields were excluded from the descriptor checksum, meaning changes to these fields went undetected during integrity verification.
+- **GC ignored retention policies** (`internal/gc/collector.go`): `Plan()` never applied `KeepMinSnapshots` or `KeepMinAge` rules, so GC could delete snapshots that should have been protected.
+- **Engine detection on wrong filesystem** (`internal/engine/juicefs.go`): `DetectEngine` tested reflink capability in `/tmp` instead of the actual repository filesystem, leading to incorrect engine selection for repos on different mounts.
+- **Config cache mutation** (`pkg/config/config.go`): `Load()` returned a direct pointer to the cached config, allowing callers to mutate shared state. Now returns a deep copy.
+- **Color state race condition** (`pkg/color/color.go`): Refactored to use `atomic.Bool` with an `overridden` flag so explicit `Enable()`/`Disable()` calls are not silently undone by `Init()` or `NO_COLOR` env.
+- **Doctor format version detection** (`internal/doctor/doctor.go`): `checkFormatVersion` used `fmt.Sscanf` which silently treated non-numeric content as 0. Now uses `strconv.Atoi` to properly detect corrupted format files.
+
+### Robustness improvements
+
+- **Input validation**: `Restorer.restore()` now validates non-empty `worktreeName` and `snapshotID`; `Collector.Run()` validates non-empty `planID`.
+- **Error visibility**: `worktree.List()`, `gc.PlanWithPolicy()` now log warnings for malformed configs and descriptor load errors instead of silently skipping.
+- **Resource safety**: `FsyncTree()` uses close-after-sync pattern to prevent file handle leaks on error.
+- **Path handling**: `cli/init.go` uses `filepath.Join()` instead of string concatenation.
+
+### Test infrastructure
+
+- **20+ new unit tests**: GC retention policies (age, count, combined, zero), restore input validation, snapshot compression, empty worktree snapshots, corrupted descriptors, concurrent config access, concurrent audit appends, fsutil error paths, diff edge cases, doctor repair/detection.
+- **6 new E2E conformance tests**: compression round-trip, GC retention policy, doctor crash recovery, concurrent worktree operations, first snapshot on new worktree, verify after restore.
+- **5 new regression tests**: CanSnapshot fix, GC retention policy, restore empty args, GC empty plan ID, config cache mutation.
+- **Pre-existing test fix**: `TestE2E_Worktree_WorktreePath` now creates a snapshot before forking.
+- **Coverage**: 78.6% → 79.8% overall; GC 81.6% → 89.7%.
+
+### Project management infrastructure
+
+- **Makefile**: 6 new targets — `test-race`, `test-cover` (60% threshold), `test-all`, `integration`, `release-gate`, `clean`.
+- **Release gate**: `make release-gate` runs the full pre-release pipeline (test-race, test-cover, lint, build, conformance, fuzz).
+- **CLAUDE.md**: Added Build & Test section with all Makefile targets, testing conventions, coverage requirements, and pre-merge gate instructions.
+- **Release policy**: `docs/12_RELEASE_POLICY.md` updated to reference `make release-gate`.
+
+### Migration from v7.2
+
+**No breaking changes.** All v7.2 repositories and snapshots are fully compatible with v8.0.
+
+Recommended: Run `jvs doctor --strict` after upgrading to verify repository health.
+
+### Affected files
+
+29 files modified, 1 new conformance test file created. ~880 lines added, ~139 lines removed.
+
+---
+
 ## v7.2 — 2026-02-23
 
 ### KISS Simplification: Focus on Core Value

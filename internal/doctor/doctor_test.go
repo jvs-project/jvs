@@ -350,6 +350,69 @@ func TestDoctor_Check_AuditChain_NoAuditLog(t *testing.T) {
 	assert.True(t, result.Healthy)
 }
 
+func TestDoctor_Check_WithOrphanTmp(t *testing.T) {
+	repoPath := setupTestRepo(t)
+
+	require.NoError(t, os.MkdirAll(filepath.Join(repoPath, ".jvs-tmp-snapshot-abc123"), 0755))
+	require.NoError(t, os.MkdirAll(filepath.Join(repoPath, ".jvs-tmp-snapshot-def456"), 0755))
+
+	doc := doctor.NewDoctor(repoPath)
+	result, err := doc.Check(false)
+	require.NoError(t, err)
+
+	tmpFindings := 0
+	for _, f := range result.Findings {
+		if f.Category == "tmp" {
+			tmpFindings++
+		}
+	}
+	assert.GreaterOrEqual(t, tmpFindings, 2, "should find at least 2 orphan tmp directories")
+}
+
+func TestDoctor_Repair_WithOrphanTmp(t *testing.T) {
+	repoPath := setupTestRepo(t)
+
+	dir1 := filepath.Join(repoPath, ".jvs-tmp-snapshot-abc123")
+	dir2 := filepath.Join(repoPath, ".jvs-tmp-snapshot-def456")
+	require.NoError(t, os.MkdirAll(dir1, 0755))
+	require.NoError(t, os.MkdirAll(dir2, 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(dir1, "partial.dat"), []byte("data"), 0644))
+
+	doc := doctor.NewDoctor(repoPath)
+	results, err := doc.Repair([]string{"clean_tmp"})
+	require.NoError(t, err)
+
+	assert.Len(t, results, 1)
+	assert.True(t, results[0].Success)
+	assert.GreaterOrEqual(t, results[0].Cleaned, 2)
+
+	assert.NoDirExists(t, dir1)
+	assert.NoDirExists(t, dir2)
+}
+
+func TestDoctor_Check_CorruptedFormatVersion(t *testing.T) {
+	repoPath := setupTestRepo(t)
+
+	versionPath := filepath.Join(repoPath, ".jvs", "format_version")
+	require.NoError(t, os.WriteFile(versionPath, []byte("not-a-number"), 0644))
+
+	doc := doctor.NewDoctor(repoPath)
+	result, err := doc.Check(false)
+	require.NoError(t, err)
+
+	assert.False(t, result.Healthy)
+	require.NotEmpty(t, result.Findings)
+
+	found := false
+	for _, f := range result.Findings {
+		if f.Category == "format" && f.Severity == "critical" {
+			found = true
+			assert.Contains(t, f.Description, "invalid content")
+		}
+	}
+	assert.True(t, found, "expected critical format finding for corrupted format_version")
+}
+
 func TestDoctor_Check_SnapshotIntegrity_VerifyError(t *testing.T) {
 	repoPath := setupTestRepo(t)
 

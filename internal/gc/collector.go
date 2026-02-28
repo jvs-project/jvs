@@ -40,21 +40,72 @@ func (c *Collector) SetProgressCallback(cb func(string, int, int, string)) {
 
 // Plan creates a GC plan.
 func (c *Collector) Plan() (*model.GCPlan, error) {
+	return c.PlanWithPolicy(model.DefaultRetentionPolicy())
+}
+
+// PlanWithPolicy creates a GC plan using the given retention policy.
+func (c *Collector) PlanWithPolicy(policy model.RetentionPolicy) (*model.GCPlan, error) {
 	protectedSet, protectedByLineage, protectedByPin, err := c.computeProtectedSet()
 	if err != nil {
 		return nil, fmt.Errorf("compute protected set: %w", err)
 	}
 
-	// Find all snapshots
+	// Find all snapshots with descriptors for retention analysis
 	allSnapshots, err := c.listAllSnapshots()
 	if err != nil {
 		return nil, fmt.Errorf("list snapshots: %w", err)
 	}
 
-	// Determine what to delete
 	protectedMap := make(map[model.SnapshotID]bool)
 	for _, id := range protectedSet {
 		protectedMap[id] = true
+	}
+
+	// Apply retention policy: protect by age
+	protectedByRetention := 0
+	now := time.Now()
+	if policy.KeepMinAge > 0 {
+		for _, id := range allSnapshots {
+			if protectedMap[id] {
+				continue
+			}
+			desc, err := snapshot.LoadDescriptor(c.repoRoot, id)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "warning: gc: skipping descriptor %s: %v\n", id, err)
+				continue
+			}
+			if now.Sub(desc.CreatedAt) < policy.KeepMinAge {
+				protectedMap[id] = true
+				protectedByRetention++
+			}
+		}
+	}
+
+	// Apply retention policy: protect by count (keep most recent N)
+	if policy.KeepMinSnapshots > 0 {
+		allDescs, err := snapshot.ListAll(c.repoRoot)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "warning: gc: failed to list all descriptors for retention-by-count: %v\n", err)
+		}
+		if err == nil {
+			kept := 0
+			for _, desc := range allDescs {
+				if kept >= policy.KeepMinSnapshots {
+					break
+				}
+				if !protectedMap[desc.SnapshotID] {
+					protectedMap[desc.SnapshotID] = true
+					protectedByRetention++
+				}
+				kept++
+			}
+		}
+	}
+
+	// Rebuild protected set from map
+	protectedSet = protectedSet[:0]
+	for id := range protectedMap {
+		protectedSet = append(protectedSet, id)
 	}
 
 	var toDelete []model.SnapshotID
@@ -64,26 +115,21 @@ func (c *Collector) Plan() (*model.GCPlan, error) {
 		}
 	}
 
-	// Estimate bytes (rough)
-	deletableBytes := int64(len(toDelete)) * 1024 * 1024 // assume 1MB each
+	deletableBytes := int64(len(toDelete)) * 1024 * 1024
 
 	plan := &model.GCPlan{
-		PlanID:               uuidutil.NewV4(),
-		CreatedAt:            time.Now().UTC(),
-		ProtectedSet:         protectedSet,
-		ProtectedByPin:       protectedByPin,
-		ProtectedByLineage:   protectedByLineage,
-		ProtectedByRetention: 0, // No retention-based protection in simplified mode
-		CandidateCount:       len(toDelete),
-		ToDelete:             toDelete,
+		PlanID:                 uuidutil.NewV4(),
+		CreatedAt:              time.Now().UTC(),
+		ProtectedSet:           protectedSet,
+		ProtectedByPin:         protectedByPin,
+		ProtectedByLineage:     protectedByLineage,
+		ProtectedByRetention:   protectedByRetention,
+		CandidateCount:         len(toDelete),
+		ToDelete:               toDelete,
 		DeletableBytesEstimate: deletableBytes,
-		RetentionPolicy: model.RetentionPolicy{
-			KeepMinSnapshots: 10,
-			KeepMinAge:       24 * time.Hour,
-		},
+		RetentionPolicy:        policy,
 	}
 
-	// Write plan
 	if err := c.writePlan(plan); err != nil {
 		return nil, fmt.Errorf("write plan: %w", err)
 	}
@@ -93,6 +139,10 @@ func (c *Collector) Plan() (*model.GCPlan, error) {
 
 // Run executes a GC plan.
 func (c *Collector) Run(planID string) error {
+	if planID == "" {
+		return fmt.Errorf("plan ID is required")
+	}
+
 	plan, err := c.LoadPlan(planID)
 	if err != nil {
 		return fmt.Errorf("load plan: %w", err)

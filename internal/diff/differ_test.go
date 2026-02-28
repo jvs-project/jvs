@@ -211,6 +211,49 @@ func TestDiffResult_FormatHuman(t *testing.T) {
 	assert.Contains(t, output, "(100 -> 200 bytes)")
 }
 
+func TestDiff_NonExistentSnapshot(t *testing.T) {
+	tmpDir := t.TempDir()
+	differ := NewDiffer(tmpDir)
+
+	// Both snapshots don't exist — toID checked first
+	_, err := differ.Diff("nonexistent-from", "nonexistent-to")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "snapshot not found")
+
+	// Only fromID exists, toID missing
+	snap1 := filepath.Join(tmpDir, ".jvs", "snapshots", "snap-exists")
+	require.NoError(t, os.MkdirAll(snap1, 0755))
+
+	_, err = differ.Diff("snap-exists", "nonexistent-to")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "to snapshot not found")
+
+	// Only toID exists, fromID missing
+	_, err = differ.Diff("nonexistent-from", "snap-exists")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "from snapshot not found")
+}
+
+func TestDiff_EmptySnapshots(t *testing.T) {
+	tmpDir := t.TempDir()
+	differ := NewDiffer(tmpDir)
+
+	snap1 := filepath.Join(tmpDir, ".jvs", "snapshots", "empty1")
+	snap2 := filepath.Join(tmpDir, ".jvs", "snapshots", "empty2")
+	require.NoError(t, os.MkdirAll(snap1, 0755))
+	require.NoError(t, os.MkdirAll(snap2, 0755))
+
+	result, err := differ.Diff("empty1", "empty2")
+	require.NoError(t, err)
+
+	assert.Equal(t, 0, result.TotalAdded)
+	assert.Equal(t, 0, result.TotalRemoved)
+	assert.Equal(t, 0, result.TotalModified)
+	assert.Empty(t, result.Added)
+	assert.Empty(t, result.Removed)
+	assert.Empty(t, result.Modified)
+}
+
 func TestDiffResult_FormatHuman_NoChanges(t *testing.T) {
 	result := &DiffResult{
 		FromSnapshotID: "snap1",

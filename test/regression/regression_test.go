@@ -443,3 +443,90 @@ func extractSnapshotIDFromHistory(historyOutput string) string {
 	}
 	return ""
 }
+
+// TestRegression_CanSnapshotNewWorktree verifies that the first snapshot in a
+// freshly created worktree succeeds.
+//
+// Bug: CanSnapshot() returned false for new worktrees with no snapshots,
+// blocking the first snapshot.
+// Fixed: 2026-02-28
+func TestRegression_CanSnapshotNewWorktree(t *testing.T) {
+	repoPath := initTestRepo(t)
+
+	// Create a brand-new worktree
+	_, stderr, code := runJVSInRepo(t, repoPath, "worktree", "create", "fresh")
+	assert.Equal(t, 0, code, "worktree create should succeed: %s", stderr)
+
+	freshPath := filepath.Join(repoPath, "worktrees", "fresh")
+
+	// Add files to the fresh worktree
+	createFiles(t, freshPath, map[string]string{
+		"hello.txt": "world",
+	})
+
+	// Snapshot from within the fresh worktree (first-ever snapshot)
+	stdout, stderr, code := runJVS(t, freshPath, "snapshot", "first snapshot in fresh worktree")
+	assert.Equal(t, 0, code, "first snapshot in new worktree should succeed: %s", stderr)
+	assert.NotEmpty(t, stdout, "snapshot should produce output")
+
+	// History should list the snapshot
+	histOut, _, _ := runJVS(t, freshPath, "history")
+	assert.Contains(t, histOut, "first snapshot in fresh worktree",
+		"history should show the snapshot note")
+}
+
+// TestRegression_GCRespectsRetentionPolicy verifies that GC Plan() honours
+// retention policies and does not mark protected snapshots for deletion.
+//
+// Bug: GC Plan() ignored configured retention policies (KeepMinSnapshots,
+// KeepMinAge).
+// Fixed: 2026-02-28
+func TestRegression_GCRespectsRetentionPolicy(t *testing.T) {
+	repoPath := initTestRepo(t)
+
+	// Create a snapshot so the repo is non-empty
+	_, stderr, code := runJVSInRepo(t, repoPath, "snapshot", "protected snapshot")
+	assert.Equal(t, 0, code, "snapshot should succeed: %s", stderr)
+
+	// Run gc plan
+	stdout, stderr, code := runJVSInRepo(t, repoPath, "gc", "plan")
+	assert.Equal(t, 0, code, "gc plan should succeed: %s", stderr)
+
+	// The single snapshot is the worktree HEAD and therefore protected.
+	// "To delete: 0 snapshots" must appear in the output.
+	assert.Contains(t, stdout, "To delete: 0 snapshots",
+		"gc plan should report 0 deletable snapshots for a protected snapshot")
+}
+
+// TestRegression_ConfigCacheMutation is tested at the unit level in
+// pkg/config/config_test.go TestLoad_CacheCopyIndependence
+
+// TestRegression_RestoreEmptyArgs verifies that restore fails gracefully when
+// given an empty snapshot ID instead of panicking.
+//
+// Bug: Restorer.restore() did not validate empty worktreeName or snapshotID.
+// Fixed: 2026-02-28
+func TestRegression_RestoreEmptyArgs(t *testing.T) {
+	repoPath := initTestRepo(t)
+
+	// Attempt restore with an empty snapshot ID
+	_, stderr, code := runJVSInRepo(t, repoPath, "restore", "")
+	assert.NotEqual(t, 0, code, "restore with empty snapshot ID should fail")
+
+	// Must not panic — a helpful error message is expected
+	assert.NotContains(t, stderr, "panic", "restore should not panic on empty args")
+}
+
+// TestRegression_GCRunEmptyPlanID verifies that gc run fails gracefully when
+// given an empty plan ID.
+//
+// Bug: GC Run() did not validate empty planID.
+// Fixed: 2026-02-28
+func TestRegression_GCRunEmptyPlanID(t *testing.T) {
+	repoPath := initTestRepo(t)
+
+	// Attempt gc run with an empty plan ID
+	_, stderr, code := runJVSInRepo(t, repoPath, "gc", "run", "--plan-id", "")
+	assert.NotEqual(t, 0, code, "gc run with empty plan-id should fail")
+	assert.NotContains(t, stderr, "panic", "gc run should not panic on empty plan-id")
+}

@@ -128,7 +128,8 @@ func (m *Manager) List() ([]*model.WorktreeConfig, error) {
 		}
 		cfg, err := repo.LoadWorktreeConfig(m.repoRoot, entry.Name())
 		if err != nil {
-			continue // skip malformed
+			fmt.Fprintf(os.Stderr, "warning: skipping malformed worktree %s: %v\n", entry.Name(), err)
+			continue
 		}
 		configs = append(configs, cfg)
 	}

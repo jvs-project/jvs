@@ -80,11 +80,11 @@ func FsyncTree(root string) error {
 			if err != nil {
 				return fmt.Errorf("open %s for fsync: %w", path, err)
 			}
-			if err := f.Sync(); err != nil {
-				f.Close()
+			err = f.Sync()
+			f.Close()
+			if err != nil {
 				return fmt.Errorf("fsync %s: %w", path, err)
 			}
-			f.Close()
 		}
 		return nil
 	})

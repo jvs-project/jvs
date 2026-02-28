@@ -103,13 +103,13 @@ func TestWorktreeConfig_CanSnapshot(t *testing.T) {
 		expected bool
 	}{
 		{
-			name: "cannot snapshot when no snapshots exist",
+			name: "can snapshot when no snapshots exist (first snapshot)",
 			config: model.WorktreeConfig{
 				Name:             "test",
 				HeadSnapshotID:   "",
 				LatestSnapshotID: "",
 			},
-			expected: false,
+			expected: true,
 		},
 		{
 			name: "can snapshot when at HEAD with snapshots",
@@ -130,13 +130,13 @@ func TestWorktreeConfig_CanSnapshot(t *testing.T) {
 			expected: false,
 		},
 		{
-			name: "cannot snapshot when latest is empty",
+			name: "can snapshot when latest is empty (fresh worktree with head set)",
 			config: model.WorktreeConfig{
 				Name:             "test",
 				HeadSnapshotID:   "1708300800000-a3f7c1b2",
 				LatestSnapshotID: "",
 			},
-			expected: false,
+			expected: true,
 		},
 	}
 	for _, tt := range tests {

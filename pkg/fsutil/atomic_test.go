@@ -461,6 +461,30 @@ func TestAtomicWrite_JsonContent(t *testing.T) {
 	assert.Equal(t, jsonData, content)
 }
 
+func TestAtomicWrite_ReadOnlyDir(t *testing.T) {
+	dir := t.TempDir()
+	roDir := filepath.Join(dir, "readonly")
+	require.NoError(t, os.Mkdir(roDir, 0555))
+	t.Cleanup(func() {
+		os.Chmod(roDir, 0755)
+	})
+
+	path := filepath.Join(roDir, "file.txt")
+	err := fsutil.AtomicWrite(path, []byte("data"), 0644)
+	assert.Error(t, err)
+}
+
+func TestFsyncTree_WithFiles(t *testing.T) {
+	dir := t.TempDir()
+
+	for _, name := range []string{"a.txt", "b.txt", "c.txt"} {
+		require.NoError(t, os.WriteFile(filepath.Join(dir, name), []byte("content"), 0644))
+	}
+
+	err := fsutil.FsyncTree(dir)
+	assert.NoError(t, err)
+}
+
 func TestFsyncTree_FileVanishesDuringWalk(t *testing.T) {
 	// This test is difficult to implement without some form of injection
 	// because we need a file to disappear between Walk and Open/Sync

@@ -46,6 +46,13 @@ func (r *Restorer) Restore(worktreeName string, snapshotID model.SnapshotID) err
 
 // restore performs the actual restore operation.
 func (r *Restorer) restore(worktreeName string, snapshotID model.SnapshotID) error {
+	if worktreeName == "" {
+		return fmt.Errorf("worktree name is required")
+	}
+	if snapshotID == "" {
+		return fmt.Errorf("snapshot ID is required")
+	}
+
 	// Load and verify snapshot
 	desc, err := snapshot.LoadDescriptor(r.repoRoot, snapshotID)
 	if err != nil {

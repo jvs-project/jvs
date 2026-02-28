@@ -57,12 +57,12 @@ func Default() *Config {
 
 // Load loads configuration from .jvs/config.yaml.
 // Returns default config if file doesn't exist.
+// The returned Config must not be modified; use Save() for changes.
 func Load(repoRoot string) (*Config, error) {
-	// Check cache first
 	cacheMu.RLock()
 	if cfg, ok := cache[repoRoot]; ok {
 		cacheMu.RUnlock()
-		return cfg, nil
+		return deepCopy(cfg), nil
 	}
 	cacheMu.RUnlock()
 
@@ -261,9 +261,27 @@ func InvalidateCache(repoRoot string) {
 	cacheMu.Unlock()
 }
 
-// cacheAndReturn stores the config in cache.
+func deepCopy(cfg *Config) *Config {
+	cp := *cfg
+	if cfg.DefaultTags != nil {
+		cp.DefaultTags = make([]string, len(cfg.DefaultTags))
+		copy(cp.DefaultTags, cfg.DefaultTags)
+	}
+	if cfg.ProgressEnabled != nil {
+		v := *cfg.ProgressEnabled
+		cp.ProgressEnabled = &v
+	}
+	if cfg.Retention != nil {
+		r := *cfg.Retention
+		cp.Retention = &r
+	}
+	return &cp
+}
+
+// cacheAndReturn stores a deep copy of the config in cache so that
+// the caller's pointer remains independent of the cached value.
 func cacheAndReturn(repoRoot string, cfg *Config) {
 	cacheMu.Lock()
-	cache[repoRoot] = cfg
+	cache[repoRoot] = deepCopy(cfg)
 	cacheMu.Unlock()
 }

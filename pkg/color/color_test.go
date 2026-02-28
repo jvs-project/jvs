@@ -7,28 +7,26 @@ import (
 )
 
 func TestEnabled(t *testing.T) {
-	// Save original state
-	origEnabled := state.enabled
+	origEnabled := state.enabled.Load()
+	origOverridden := state.overridden.Load()
 
-	// Test default enabled state (in most test environments)
-	state.enabled = true
+	Enable()
 	if !Enabled() {
 		t.Error("expected colors to be enabled")
 	}
 
-	// Test disabling
-	state.enabled = false
+	Disable()
 	if Enabled() {
 		t.Error("expected colors to be disabled")
 	}
 
-	// Restore original state
-	state.enabled = origEnabled
+	state.enabled.Store(origEnabled)
+	state.overridden.Store(origOverridden)
 }
 
 func TestEnableDisable(t *testing.T) {
-	// Save original state
-	origEnabled := state.enabled
+	origEnabled := state.enabled.Load()
+	origOverridden := state.overridden.Load()
 
 	Enable()
 	if !Enabled() {
@@ -40,13 +38,12 @@ func TestEnableDisable(t *testing.T) {
 		t.Error("expected colors to be disabled after Disable()")
 	}
 
-	// Restore original state
-	state.enabled = origEnabled
+	state.enabled.Store(origEnabled)
+	state.overridden.Store(origOverridden)
 }
 
 func TestColorFuncs(t *testing.T) {
-	// Test that color functions add codes when enabled
-	state.enabled = true
+	Enable()
 
 	tests := []struct {
 		name     string
@@ -78,8 +75,7 @@ func TestColorFuncs(t *testing.T) {
 }
 
 func TestColorFuncsDisabled(t *testing.T) {
-	// Test that color functions return plain text when disabled
-	state.enabled = false
+	Disable()
 
 	tests := []struct {
 		name  string
@@ -105,7 +101,7 @@ func TestColorFuncsDisabled(t *testing.T) {
 }
 
 func TestSpecializedFormatters(t *testing.T) {
-	state.enabled = true
+	Enable()
 
 	tests := []struct {
 		name  string
@@ -135,7 +131,7 @@ func TestSpecializedFormatters(t *testing.T) {
 }
 
 func TestFormattedFunctions(t *testing.T) {
-	state.enabled = true
+	Enable()
 
 	if result := Successf("test %d", 123); !containsString(result, Green) {
 		t.Errorf("Successf() should contain green color code, got %q", result)
@@ -155,10 +151,9 @@ func TestFormattedFunctions(t *testing.T) {
 }
 
 func TestCode(t *testing.T) {
-	state.enabled = true
+	Enable()
 
 	result := Code("jvs init")
-	// Code should have both Bold and Dim
 	if !containsString(result, Bold) {
 		t.Errorf("Code() should contain bold code, got %q", result)
 	}
@@ -166,48 +161,46 @@ func TestCode(t *testing.T) {
 		t.Errorf("Code() should contain reset code, got %q", result)
 	}
 
-	// Test disabled
-	state.enabled = false
+	Disable()
 	result = Code("test")
 	if result != "test" {
 		t.Errorf("Code() disabled should return plain text, got %q", result)
 	}
-	state.enabled = true // Reset
+	Enable()
 }
 
 func TestInitRespectsNoColorEnv(t *testing.T) {
-	// Save original NO_COLOR value
 	origNoColor, exists := os.LookupEnv("NO_COLOR")
 
-	// Set NO_COLOR
 	os.Setenv("NO_COLOR", "1")
-	state.enabled = true // Reset to allow Init to work
-	state.once = sync.Once{} // Reset once to allow re-init
+	state.overridden.Store(false)
+	state.enabled.Store(true)
+	state.once = sync.Once{}
 
 	Init(false)
 	if Enabled() {
 		t.Error("expected colors to be disabled when NO_COLOR is set")
 	}
 
-	// Restore original state
 	if exists {
 		os.Setenv("NO_COLOR", origNoColor)
 	} else {
 		os.Unsetenv("NO_COLOR")
 	}
-	state.once = sync.Once{} // Reset once for subsequent tests
+	state.once = sync.Once{}
 }
 
 func TestInitRespectsNoColorFlag(t *testing.T) {
-	state.enabled = true
-	state.once = sync.Once{} // Reset once
+	state.overridden.Store(false)
+	state.enabled.Store(true)
+	state.once = sync.Once{}
 
-	Init(true) // noColorFlag = true
+	Init(true)
 	if Enabled() {
 		t.Error("expected colors to be disabled when noColorFlag is true")
 	}
 
-	state.once = sync.Once{} // Reset for subsequent tests
+	state.once = sync.Once{}
 }
 
 // Helper function to check if string contains substring

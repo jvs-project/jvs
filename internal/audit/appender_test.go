@@ -2,6 +2,7 @@ package audit_test
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -547,6 +548,59 @@ func TestFileAppender_NumericDetails(t *testing.T) {
 	assert.Equal(t, float64(-100), record.Details["neg_int"])
 	assert.Equal(t, true, record.Details["bool_true"])
 	assert.Equal(t, false, record.Details["bool_false"])
+}
+
+func TestFileAppender_ConcurrentAppend(t *testing.T) {
+	dir := t.TempDir()
+	logPath := filepath.Join(dir, "audit.jsonl")
+
+	appender := audit.NewFileAppender(logPath)
+
+	eventTypes := []model.AuditEventType{
+		model.EventTypeSnapshotCreate,
+		model.EventTypeSnapshotDelete,
+		model.EventTypeRestore,
+		model.EventTypeWorktreeCreate,
+		model.EventTypeWorktreeRename,
+		model.EventTypeWorktreeRemove,
+		model.EventTypeGCPlan,
+		model.EventTypeGCRun,
+		model.EventTypeSnapshotCreate,
+		model.EventTypeRestore,
+	}
+
+	var wg sync.WaitGroup
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			err := appender.Append(eventTypes[idx], "main", model.SnapshotID(fmt.Sprintf("snap-%d", idx)), nil)
+			assert.NoError(t, err)
+		}(i)
+	}
+	wg.Wait()
+
+	data, err := os.ReadFile(logPath)
+	require.NoError(t, err)
+
+	scanner := bufio.NewScanner(bytes.NewReader(data))
+	count := 0
+	for scanner.Scan() {
+		count++
+	}
+	assert.Equal(t, 10, count)
+}
+
+func TestFileAppender_AppendToNonExistentDir(t *testing.T) {
+	dir := t.TempDir()
+	logPath := filepath.Join(dir, "a", "b", "c", "d", "audit.jsonl")
+
+	appender := audit.NewFileAppender(logPath)
+	err := appender.Append(model.EventTypeSnapshotCreate, "main", "snap-1", nil)
+	require.NoError(t, err)
+
+	_, err = os.Stat(logPath)
+	require.NoError(t, err, "audit file should have been created along with parent directories")
 }
 
 func TestFileAppender_GetLastRecordHash_MultipleRecords(t *testing.T) {

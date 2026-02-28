@@ -22,12 +22,15 @@ func TestDiff_SimpleIntegration(t *testing.T) {
 		t.Skip("integration test")
 	}
 
-	// Create a temporary directory for testing
+	jvsBin := "/tmp/jvs"
+	if _, err := os.Stat(jvsBin); os.IsNotExist(err) {
+		t.Skip("jvs binary not found at /tmp/jvs; build first with: go build -o /tmp/jvs ./cmd/jvs")
+	}
+
 	tmpDir := t.TempDir()
 	repoPath := filepath.Join(tmpDir, "testrepo")
 
-	// Initialize repo
-	cmd := exec.Command("/tmp/jvs", "init", "testrepo")
+	cmd := exec.Command(jvsBin, "init", "testrepo")
 	cmd.Dir = tmpDir
 	output, err := cmd.CombinedOutput()
 	require.NoError(t, err, "init failed: %s", output)
@@ -37,24 +40,20 @@ func TestDiff_SimpleIntegration(t *testing.T) {
 	// Create initial file
 	require.NoError(t, os.WriteFile(filepath.Join(mainPath, "file1.txt"), []byte("content1"), 0644))
 
-	// Create first snapshot
-	cmd = exec.Command("/tmp/jvs", "snapshot", "first snapshot")
+	cmd = exec.Command(jvsBin, "snapshot", "first snapshot")
 	cmd.Dir = mainPath
 	output, err = cmd.CombinedOutput()
 	require.NoError(t, err, "first snapshot failed: %s", output)
 
-	// Modify and add new file
 	require.NoError(t, os.WriteFile(filepath.Join(mainPath, "file1.txt"), []byte("content1-modified"), 0644))
 	require.NoError(t, os.WriteFile(filepath.Join(mainPath, "file2.txt"), []byte("new file"), 0644))
 
-	// Create second snapshot
-	cmd = exec.Command("/tmp/jvs", "snapshot", "second snapshot")
+	cmd = exec.Command(jvsBin, "snapshot", "second snapshot")
 	cmd.Dir = mainPath
 	output, err = cmd.CombinedOutput()
 	require.NoError(t, err, "second snapshot failed: %s", output)
 
-	// Get snapshot IDs
-	cmd = exec.Command("/tmp/jvs", "history", "--json")
+	cmd = exec.Command(jvsBin, "history", "--json")
 	cmd.Dir = mainPath
 	output, err = cmd.Output()
 	require.NoError(t, err, "history failed: %s", output)
@@ -62,8 +61,7 @@ func TestDiff_SimpleIntegration(t *testing.T) {
 	historyLines := strings.Split(strings.TrimSpace(string(output)), "\n")
 	require.GreaterOrEqual(t, len(historyLines), 2)
 
-	// Run diff command
-	cmd = exec.Command("/tmp/jvs", "diff", "--stat")
+	cmd = exec.Command(jvsBin, "diff", "--stat")
 	cmd.Dir = mainPath
 	output, err = cmd.CombinedOutput()
 	require.NoError(t, err, "diff failed: %s", output)

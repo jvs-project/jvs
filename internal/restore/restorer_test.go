@@ -828,3 +828,21 @@ func TestRestorer_Restore_CorruptedPayloadHash(t *testing.T) {
 	assert.Contains(t, err.Error(), "verify snapshot")
 }
 
+func TestRestorer_Restore_EmptyWorktreeName(t *testing.T) {
+	repoPath := setupTestRepo(t)
+	desc := createSnapshot(t, repoPath)
+
+	restorer := restore.NewRestorer(repoPath, model.EngineCopy)
+	err := restorer.Restore("", desc.SnapshotID)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "worktree name is required")
+}
+
+func TestRestorer_Restore_EmptyBothArgs(t *testing.T) {
+	repoPath := setupTestRepo(t)
+
+	restorer := restore.NewRestorer(repoPath, model.EngineCopy)
+	err := restorer.Restore("", "")
+	assert.Error(t, err)
+}
+

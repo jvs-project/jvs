@@ -145,9 +145,9 @@ func DetectEngine(repoRoot string) (Engine, error) {
 	}
 
 	// 2. Check if reflink is supported (btrfs, xfs, apfs)
+	// Test on the target filesystem, not system temp dir
 	reflinkEngine := NewReflinkEngine()
-	// Try a test reflink
-	testDir, err := os.MkdirTemp("", "jvs-reflink-test-")
+	testDir, err := os.MkdirTemp(repoRoot, ".jvs-reflink-test-")
 	if err == nil {
 		testFile := testDir + "/test"
 		os.WriteFile(testFile, []byte("test"), 0644)

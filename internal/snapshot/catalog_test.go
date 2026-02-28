@@ -532,3 +532,45 @@ func TestFindByTag_FindErrorPropagation(t *testing.T) {
 	_, err = snapshot.FindByTag(dir, "release")
 	assert.Error(t, err)
 }
+
+func TestListAll_EmptyRepo(t *testing.T) {
+	repoPath := setupCatalogTestRepo(t)
+
+	all, err := snapshot.ListAll(repoPath)
+	require.NoError(t, err)
+	assert.Empty(t, all)
+	assert.Len(t, all, 0)
+}
+
+func TestFind_NoMatches(t *testing.T) {
+	repoPath := setupCatalogTestRepo(t)
+
+	createCatalogSnapshot(t, repoPath, "alpha release", []string{"alpha"})
+	createCatalogSnapshot(t, repoPath, "beta release", []string{"beta"})
+
+	opts := snapshot.FilterOptions{NoteContains: "gamma", HasTag: "nonexistent"}
+	matches, err := snapshot.Find(repoPath, opts)
+	require.NoError(t, err)
+	assert.Empty(t, matches)
+}
+
+func TestLoadDescriptor_CorruptedJSON(t *testing.T) {
+	repoPath := setupCatalogTestRepo(t)
+
+	descriptorsDir := filepath.Join(repoPath, ".jvs", "descriptors")
+	require.NoError(t, os.MkdirAll(descriptorsDir, 0755))
+	descriptorPath := filepath.Join(descriptorsDir, "corrupt-snapshot.json")
+	require.NoError(t, os.WriteFile(descriptorPath, []byte("not valid json at all"), 0644))
+
+	_, err := snapshot.LoadDescriptor(repoPath, "corrupt-snapshot")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "parse descriptor")
+}
+
+func TestLoadDescriptor_NonExistent(t *testing.T) {
+	repoPath := setupCatalogTestRepo(t)
+
+	_, err := snapshot.LoadDescriptor(repoPath, "does-not-exist-12345")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "not found")
+}

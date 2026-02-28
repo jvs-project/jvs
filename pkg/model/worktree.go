@@ -22,7 +22,11 @@ func (c *WorktreeConfig) IsDetached() bool {
 }
 
 // CanSnapshot returns true if the worktree can create new snapshots.
-// Only worktrees at HEAD (not detached) can create snapshots.
+// A worktree can snapshot if it has no snapshots yet (first snapshot)
+// or if it is at HEAD (not detached).
 func (c *WorktreeConfig) CanSnapshot() bool {
-	return !c.IsDetached() && c.LatestSnapshotID != ""
+	if c.LatestSnapshotID == "" {
+		return true
+	}
+	return !c.IsDetached()
 }

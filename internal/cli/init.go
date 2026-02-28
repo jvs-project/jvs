@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/spf13/cobra"
 
@@ -30,7 +31,7 @@ This creates:
 		}
 
 		cwd, _ := os.Getwd()
-		repoPath := cwd + "/" + name
+		repoPath := filepath.Join(cwd, name)
 
 		r, err := repo.Init(repoPath, name)
 		if err != nil {

@@ -232,6 +232,11 @@ func TestE2E_Worktree_IndependentHistory(t *testing.T) {
 // TestE2E_Worktree_WorktreePath tests the worktree path command
 func TestE2E_Worktree_WorktreePath(t *testing.T) {
 	repoPath, _ := initTestRepo(t)
+	mainPath := filepath.Join(repoPath, "main")
+
+	// Create a snapshot so we can fork from it
+	os.WriteFile(filepath.Join(mainPath, "file.txt"), []byte("content"), 0644)
+	runJVSInRepo(t, repoPath, "snapshot", "baseline")
 
 	// Fork a worktree
 	runJVSInRepo(t, repoPath, "worktree", "fork", "my-feature")

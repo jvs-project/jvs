@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jvs-project/jvs/internal/compression"
 	"github.com/jvs-project/jvs/internal/repo"
 	"github.com/jvs-project/jvs/internal/snapshot"
 	"github.com/jvs-project/jvs/pkg/model"
@@ -739,4 +740,52 @@ func TestCreatePartial_CallCreateViaCreatePartial(t *testing.T) {
 	snapshotDir2 := filepath.Join(repoPath, ".jvs", "snapshots", string(desc2.SnapshotID))
 	assert.FileExists(t, filepath.Join(snapshotDir1, "file.txt"))
 	assert.FileExists(t, filepath.Join(snapshotDir2, "file.txt"))
+}
+
+func TestCreator_SetCompression(t *testing.T) {
+	repoPath := setupTestRepo(t)
+
+	mainPath := filepath.Join(repoPath, "main")
+	os.WriteFile(filepath.Join(mainPath, "file.txt"), []byte("hello world"), 0644)
+
+	creator := snapshot.NewCreator(repoPath, model.EngineCopy)
+	creator.SetCompression(compression.LevelDefault)
+
+	desc, err := creator.Create("main", "compressed snapshot", nil)
+	require.NoError(t, err)
+
+	require.NotNil(t, desc.Compression)
+	assert.Equal(t, "gzip", desc.Compression.Type)
+	assert.Equal(t, 6, desc.Compression.Level)
+}
+
+func TestCreator_CreatePartial_EmptyPaths(t *testing.T) {
+	repoPath := setupTestRepo(t)
+
+	mainPath := filepath.Join(repoPath, "main")
+	os.WriteFile(filepath.Join(mainPath, "file.txt"), []byte("content"), 0644)
+
+	creator := snapshot.NewCreator(repoPath, model.EngineCopy)
+	desc, err := creator.CreatePartial("main", "empty paths", nil, []string{})
+	require.NoError(t, err)
+
+	assert.Nil(t, desc.PartialPaths)
+
+	snapshotDir := filepath.Join(repoPath, ".jvs", "snapshots", string(desc.SnapshotID))
+	assert.FileExists(t, filepath.Join(snapshotDir, "file.txt"))
+}
+
+func TestCreator_Create_EmptyWorktree(t *testing.T) {
+	repoPath := setupTestRepo(t)
+
+	creator := snapshot.NewCreator(repoPath, model.EngineCopy)
+	desc, err := creator.Create("main", "empty worktree snapshot", nil)
+	require.NoError(t, err)
+
+	assert.NotEmpty(t, desc.SnapshotID)
+	assert.Equal(t, "main", desc.WorktreeName)
+
+	snapshotDir := filepath.Join(repoPath, ".jvs", "snapshots", string(desc.SnapshotID))
+	assert.DirExists(t, snapshotDir)
+	assert.FileExists(t, filepath.Join(snapshotDir, ".READY"))
 }

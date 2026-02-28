@@ -56,6 +56,10 @@ func TestE2E_Development_DailyCycle(t *testing.T) {
 		}
 	})
 
+	if len(snapshots) < 3 {
+		t.Fatalf("cannot continue: need at least 3 snapshots, got %d", len(snapshots))
+	}
+
 	// Step 4: Restore to v2 snapshot (detached state)
 	v2Snapshot := snapshots[len(snapshots)-2] // second oldest
 	t.Run("restore_to_v2", func(t *testing.T) {

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/jvs-project/jvs/internal/repo"
@@ -232,8 +233,18 @@ func (d *Doctor) checkFormatVersion(result *Result) {
 		return
 	}
 
-	var version int
-	fmt.Sscanf(string(data), "%d", &version)
+	version, err := strconv.Atoi(strings.TrimSpace(string(data)))
+	if err != nil || version <= 0 {
+		result.Findings = append(result.Findings, Finding{
+			Category:    "format",
+			Description: fmt.Sprintf("format_version file contains invalid content: %q", strings.TrimSpace(string(data))),
+			Severity:    "critical",
+			Path:        versionPath,
+		})
+		result.Healthy = false
+		return
+	}
+
 	if version > repo.FormatVersion {
 		result.Findings = append(result.Findings, Finding{
 			Category:    "format",

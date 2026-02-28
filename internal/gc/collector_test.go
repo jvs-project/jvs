@@ -3,7 +3,9 @@ package gc_test
 import (
 	"os"
 	"path/filepath"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/jvs-project/jvs/internal/gc"
 	"github.com/jvs-project/jvs/internal/repo"
@@ -13,6 +15,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+var zeroRetention = model.RetentionPolicy{}
 
 func setupTestRepo(t *testing.T) string {
 	dir := t.TempDir()
@@ -123,19 +127,16 @@ func TestCollector_Run_WithDeletions(t *testing.T) {
 	// Delete the feature worktree
 	require.NoError(t, wtMgr.Remove("feature"))
 
-	// Now the feature snapshot should be unprotected
+	// Now the feature snapshot should be unprotected (use zero retention to bypass age protection)
 	collector := gc.NewCollector(repoPath)
-	plan, err := collector.Plan()
+	plan, err := collector.PlanWithPolicy(zeroRetention)
 	require.NoError(t, err)
 
-	// Feature snapshot should be in toDelete since worktree was deleted
 	assert.Contains(t, plan.ToDelete, featureDesc.SnapshotID)
 
-	// Run GC to delete the unprotected snapshot
 	err = collector.Run(plan.PlanID)
 	require.NoError(t, err)
 
-	// Verify snapshot was deleted
 	snapshotsDir := filepath.Join(repoPath, ".jvs", "snapshots")
 	entries, _ := os.ReadDir(snapshotsDir)
 	for _, e := range entries {
@@ -276,23 +277,19 @@ func TestCollector_Run_TombstoneCreation(t *testing.T) {
 	require.NoError(t, err)
 	_ = cfg
 
-	// Delete worktree to make snapshot eligible
 	require.NoError(t, wtMgr.Remove("temp"))
 
-	// Run GC
 	collector := gc.NewCollector(repoPath)
-	plan, err := collector.Plan()
+	plan, err := collector.PlanWithPolicy(zeroRetention)
 	require.NoError(t, err)
 
 	err = collector.Run(plan.PlanID)
 	require.NoError(t, err)
 
-	// Verify tombstone was created
 	tombstonesDir := filepath.Join(repoPath, ".jvs", "gc", "tombstones")
 	entries, err := os.ReadDir(tombstonesDir)
 	require.NoError(t, err)
 
-	// Should have tombstone for deleted snapshot
 	found := false
 	for _, e := range entries {
 		if e.Name() == string(tempDesc.SnapshotID)+".json" {
@@ -462,18 +459,15 @@ func TestCollector_Run_DeletesSnapshot(t *testing.T) {
 	require.NoError(t, err)
 	_ = cfg
 
-	// Delete worktree
 	require.NoError(t, wtMgr.Remove("temp"))
 
-	// Run GC
 	collector := gc.NewCollector(repoPath)
-	plan, err := collector.Plan()
+	plan, err := collector.PlanWithPolicy(zeroRetention)
 	require.NoError(t, err)
 
 	err = collector.Run(plan.PlanID)
 	require.NoError(t, err)
 
-	// Verify snapshot directory was deleted
 	snapshotDir := filepath.Join(repoPath, ".jvs", "snapshots", string(tempDesc.SnapshotID))
 	_, err = os.Stat(snapshotDir)
 	assert.True(t, os.IsNotExist(err), "snapshot directory should be deleted")
@@ -482,7 +476,6 @@ func TestCollector_Run_DeletesSnapshot(t *testing.T) {
 func TestCollector_Run_DescriptorRemoval(t *testing.T) {
 	repoPath := setupTestRepo(t)
 
-	// Create a temp worktree with a snapshot
 	wtMgr := worktree.NewManager(repoPath)
 	cfg, err := wtMgr.Create("temp", nil)
 	require.NoError(t, err)
@@ -499,18 +492,15 @@ func TestCollector_Run_DescriptorRemoval(t *testing.T) {
 	_, err = os.Stat(descriptorPath)
 	require.NoError(t, err, "descriptor should exist")
 
-	// Delete worktree to make snapshot eligible for GC
 	require.NoError(t, wtMgr.Remove("temp"))
 
 	collector := gc.NewCollector(repoPath)
-	plan, err := collector.Plan()
+	plan, err := collector.PlanWithPolicy(zeroRetention)
 	require.NoError(t, err)
 
-	// Run GC - descriptor should also be deleted
 	err = collector.Run(plan.PlanID)
 	require.NoError(t, err)
 
-	// Verify descriptor was deleted
 	_, err = os.Stat(descriptorPath)
 	assert.True(t, os.IsNotExist(err), "descriptor should be deleted")
 }
@@ -568,19 +558,15 @@ func TestCollector_deleteSnapshot_DescriptorIsDirectory(t *testing.T) {
 	// Add a file inside so os.Remove fails (can't remove non-empty dir)
 	require.NoError(t, os.WriteFile(filepath.Join(descriptorPath, "blocker"), []byte("x"), 0644))
 
-	// Delete worktree to make snapshot eligible for GC
 	require.NoError(t, wtMgr.Remove("temp"))
 
-	// GC should still succeed despite descriptor being a non-empty directory
 	collector := gc.NewCollector(repoPath)
-	plan, err := collector.Plan()
+	plan, err := collector.PlanWithPolicy(zeroRetention)
 	require.NoError(t, err)
 
-	// Run GC - should succeed even though descriptor removal will fail (it's a non-empty dir)
 	err = collector.Run(plan.PlanID)
 	require.NoError(t, err)
 
-	// Snapshot directory should still be deleted
 	snapshotDir := filepath.Join(repoPath, ".jvs", "snapshots", string(tempDesc.SnapshotID))
 	_, err = os.Stat(snapshotDir)
 	assert.True(t, os.IsNotExist(err), "snapshot directory should be deleted")
@@ -606,18 +592,15 @@ func TestCollector_writeTombstone_TombstonesDirIsFile(t *testing.T) {
 	require.NoError(t, os.MkdirAll(filepath.Dir(tombstonesPath), 0755))
 	require.NoError(t, os.WriteFile(tombstonesPath, []byte("blocked"), 0644))
 
-	// Delete worktree to make snapshot eligible for GC
 	require.NoError(t, wtMgr.Remove("temp"))
 
-	// GC should still succeed despite tombstones path being blocked
 	collector := gc.NewCollector(repoPath)
-	plan, err := collector.Plan()
+	plan, err := collector.PlanWithPolicy(zeroRetention)
 	require.NoError(t, err)
 
 	err = collector.Run(plan.PlanID)
 	require.NoError(t, err)
 
-	// Cleanup: restore tombstones as directory for other tests
 	os.Remove(tombstonesPath)
 	os.MkdirAll(tombstonesPath, 0755)
 }
@@ -640,25 +623,19 @@ func TestCollector_Run_DeleteSnapshotError(t *testing.T) {
 	require.NoError(t, err)
 	_ = cfg
 
-	// Delete worktree to make snapshot eligible for GC
 	require.NoError(t, wtMgr.Remove("temp"))
 
-	// Make the snapshot directory read-only to cause deleteSnapshot to fail
 	snapshotDir := filepath.Join(repoPath, ".jvs", "snapshots", string(tempDesc.SnapshotID))
-	// Make a subdirectory non-removable
 	subDir := filepath.Join(snapshotDir, "subdir")
 	require.NoError(t, os.MkdirAll(subDir, 0000))
 
-	// GC should still continue despite deleteSnapshot error
 	collector := gc.NewCollector(repoPath)
-	plan, err := collector.Plan()
+	plan, err := collector.PlanWithPolicy(zeroRetention)
 	require.NoError(t, err)
 
-	// Run GC - should succeed even though snapshot deletion partially fails
 	err = collector.Run(plan.PlanID)
 	require.NoError(t, err)
 
-	// Cleanup: restore permissions for cleanup
 	os.Chmod(subDir, 0755)
 }
 
@@ -780,4 +757,174 @@ func indexOf(s, substr string) int {
 		}
 	}
 	return -1
+}
+
+func TestCollector_PlanWithPolicy_AgeRetention(t *testing.T) {
+	repoPath := setupTestRepo(t)
+
+	mainPath := filepath.Join(repoPath, "main")
+	creator := snapshot.NewCreator(repoPath, model.EngineCopy)
+
+	os.WriteFile(filepath.Join(mainPath, "file1.txt"), []byte("a"), 0644)
+	desc1, err := creator.Create("main", "first", nil)
+	require.NoError(t, err)
+
+	os.WriteFile(filepath.Join(mainPath, "file2.txt"), []byte("b"), 0644)
+	desc2, err := creator.Create("main", "second", nil)
+	require.NoError(t, err)
+
+	// KeepMinAge of 1 hour covers all just-created snapshots
+	policy := model.RetentionPolicy{KeepMinAge: 1 * time.Hour}
+	collector := gc.NewCollector(repoPath)
+	plan, err := collector.PlanWithPolicy(policy)
+	require.NoError(t, err)
+
+	assert.Contains(t, plan.ProtectedSet, desc1.SnapshotID)
+	assert.Contains(t, plan.ProtectedSet, desc2.SnapshotID)
+	assert.Empty(t, plan.ToDelete)
+}
+
+func TestCollector_PlanWithPolicy_CountRetention(t *testing.T) {
+	repoPath := setupTestRepo(t)
+
+	mainPath := filepath.Join(repoPath, "main")
+	creator := snapshot.NewCreator(repoPath, model.EngineCopy)
+
+	// Create 3 snapshots in main
+	var mainIDs []model.SnapshotID
+	for i := 0; i < 3; i++ {
+		os.WriteFile(filepath.Join(mainPath, "file.txt"), []byte(string(rune('a'+i))), 0644)
+		desc, err := creator.Create("main", "main snap", nil)
+		require.NoError(t, err)
+		mainIDs = append(mainIDs, desc.SnapshotID)
+	}
+
+	// Create temp worktree with 1 snapshot, then delete the worktree
+	wtMgr := worktree.NewManager(repoPath)
+	_, err := wtMgr.Create("temp", nil)
+	require.NoError(t, err)
+
+	tempPath := wtMgr.Path("temp")
+	os.WriteFile(filepath.Join(tempPath, "file.txt"), []byte("temp"), 0644)
+	tempDesc, err := creator.Create("temp", "temp snap", nil)
+	require.NoError(t, err)
+
+	require.NoError(t, wtMgr.Remove("temp"))
+
+	// KeepMinSnapshots=5 is more than total (4), so all should be retained
+	policy := model.RetentionPolicy{KeepMinSnapshots: 5}
+	collector := gc.NewCollector(repoPath)
+	plan, err := collector.PlanWithPolicy(policy)
+	require.NoError(t, err)
+
+	assert.Contains(t, plan.ProtectedSet, tempDesc.SnapshotID)
+	assert.Empty(t, plan.ToDelete)
+}
+
+func TestCollector_PlanWithPolicy_ZeroRetention(t *testing.T) {
+	repoPath := setupTestRepo(t)
+
+	// Create temp worktree with snapshot, then remove worktree
+	wtMgr := worktree.NewManager(repoPath)
+	_, err := wtMgr.Create("temp", nil)
+	require.NoError(t, err)
+
+	tempPath := wtMgr.Path("temp")
+	os.WriteFile(filepath.Join(tempPath, "file.txt"), []byte("temp"), 0644)
+	creator := snapshot.NewCreator(repoPath, model.EngineCopy)
+	tempDesc, err := creator.Create("temp", "temp snap", nil)
+	require.NoError(t, err)
+
+	require.NoError(t, wtMgr.Remove("temp"))
+
+	collector := gc.NewCollector(repoPath)
+	plan, err := collector.PlanWithPolicy(zeroRetention)
+	require.NoError(t, err)
+
+	assert.Contains(t, plan.ToDelete, tempDesc.SnapshotID)
+}
+
+func TestCollector_Run_EmptyPlanID(t *testing.T) {
+	repoPath := setupTestRepo(t)
+
+	collector := gc.NewCollector(repoPath)
+	err := collector.Run("")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "plan ID is required")
+}
+
+func TestCollector_SetProgressCallback(t *testing.T) {
+	repoPath := setupTestRepo(t)
+
+	// Create a snapshot in main (protected)
+	createTestSnapshot(t, repoPath)
+
+	// Create a temp worktree snapshot that will be deleted
+	wtMgr := worktree.NewManager(repoPath)
+	_, err := wtMgr.Create("temp", nil)
+	require.NoError(t, err)
+
+	tempPath := wtMgr.Path("temp")
+	os.WriteFile(filepath.Join(tempPath, "file.txt"), []byte("temp"), 0644)
+	creator := snapshot.NewCreator(repoPath, model.EngineCopy)
+	_, err = creator.Create("temp", "temp snap", nil)
+	require.NoError(t, err)
+
+	require.NoError(t, wtMgr.Remove("temp"))
+
+	var callCount atomic.Int32
+	callback := func(phase string, current, total int, msg string) {
+		callCount.Add(1)
+	}
+
+	collector := gc.NewCollector(repoPath)
+	collector.SetProgressCallback(callback)
+
+	plan, err := collector.PlanWithPolicy(zeroRetention)
+	require.NoError(t, err)
+	require.NotEmpty(t, plan.ToDelete, "expected at least one deletion candidate")
+
+	err = collector.Run(plan.PlanID)
+	require.NoError(t, err)
+
+	assert.Greater(t, callCount.Load(), int32(0), "progress callback should have been invoked")
+}
+
+func TestCollector_PlanWithPolicy_CombinedRetention(t *testing.T) {
+	repoPath := setupTestRepo(t)
+
+	mainPath := filepath.Join(repoPath, "main")
+	creator := snapshot.NewCreator(repoPath, model.EngineCopy)
+
+	// Create 3 snapshots in main
+	for i := 0; i < 3; i++ {
+		os.WriteFile(filepath.Join(mainPath, "file.txt"), []byte(string(rune('a'+i))), 0644)
+		_, err := creator.Create("main", "snap", nil)
+		require.NoError(t, err)
+	}
+
+	// Create temp worktree with snapshot, then delete worktree
+	wtMgr := worktree.NewManager(repoPath)
+	_, err := wtMgr.Create("temp", nil)
+	require.NoError(t, err)
+
+	tempPath := wtMgr.Path("temp")
+	os.WriteFile(filepath.Join(tempPath, "file.txt"), []byte("temp"), 0644)
+	tempDesc, err := creator.Create("temp", "temp snap", nil)
+	require.NoError(t, err)
+
+	require.NoError(t, wtMgr.Remove("temp"))
+
+	// Both policies: age covers all recently-created snapshots AND count covers all (4 total, keep 10)
+	policy := model.RetentionPolicy{
+		KeepMinAge:       1 * time.Hour,
+		KeepMinSnapshots: 10,
+	}
+	collector := gc.NewCollector(repoPath)
+	plan, err := collector.PlanWithPolicy(policy)
+	require.NoError(t, err)
+
+	assert.Contains(t, plan.ProtectedSet, tempDesc.SnapshotID)
+	assert.Empty(t, plan.ToDelete)
+	assert.Greater(t, plan.ProtectedByRetention, 0)
 }
