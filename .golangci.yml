@@ -8,31 +8,32 @@ linters:
     - govet
     - staticcheck
     - unused
-    - varcheck
     - ineffassign
-    - deadcode
     - gocyclo
     - dupl
     - gosec
     - misspell
     - gocritic
   disable:
-    - errcheck  # Too noisy for now
-    - goconst  # We prefer explicit constants
+    - errcheck
+    - goconst
 
 linters-settings:
   gosec:
     excludes:
-      - G104  # Errors unhandled - we handle these differently
+      - G104
   gocyclo:
     min-complexity: 15
 
 issues:
   exclude-rules:
-    - G104  # Exclude unhandled errors from gosec
+    - linters:
+        - gosec
+      text: "G104"
   max-issues-per-linter: 0
   max-same-issues: 0
 
 output:
-  format: colored-line-number
+  formats:
+    - format: colored-line-number
   print-issued-lines: true

@@ -42,7 +42,9 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Log in to Docker Hub
+        id: dockerhub-login
         if: github.event_name != 'pull_request'
+        continue-on-error: true
         uses: docker/login-action@v3
         with:
           registry: docker.io
@@ -64,6 +66,7 @@ jobs:
 
       - name: Extract metadata for Docker Hub
         id: meta-dockerhub
+        if: steps.dockerhub-login.outcome == 'success'
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.DOCKERHUB_IMAGE }}
@@ -91,6 +94,7 @@ jobs:
             VERSION=${{ github.ref_name }}
 
       - name: Build and push to Docker Hub
+        if: steps.dockerhub-login.outcome == 'success'
         uses: docker/build-push-action@v5
         with:
           context: .
