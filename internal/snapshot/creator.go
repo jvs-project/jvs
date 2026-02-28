@@ -21,11 +21,11 @@ import (
 
 // Creator handles snapshot creation using the 12-step protocol.
 type Creator struct {
-	repoRoot       string
-	engineType     model.EngineType
-	engine         engine.Engine
-	auditLogger    *audit.FileAppender
-	compression    *compression.Compressor
+	repoRoot    string
+	engineType  model.EngineType
+	engine      engine.Engine
+	auditLogger *audit.FileAppender
+	compression *compression.Compressor
 }
 
 // NewCreator creates a new snapshot creator.

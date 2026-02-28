@@ -29,9 +29,9 @@ const (
 
 // Repo represents an initialized JVS repository.
 type Repo struct {
-	Root         string
+	Root          string
 	FormatVersion int
-	RepoID       string
+	RepoID        string
 }
 
 // Init creates a new JVS repository at the specified path.

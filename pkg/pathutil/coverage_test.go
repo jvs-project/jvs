@@ -544,4 +544,3 @@ func TestValidateTag_Whitespace(t *testing.T) {
 		})
 	}
 }
-

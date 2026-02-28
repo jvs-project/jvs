@@ -32,12 +32,12 @@ var infoCmd = &cobra.Command{
 		}
 
 		info := map[string]any{
-			"repo_root":        r.Root,
-			"repo_id":          r.RepoID,
-			"format_version":   r.FormatVersion,
-			"snapshot_engine":  snapshotEngine,
-			"total_worktrees":  len(wtList),
-			"total_snapshots":  snapshotCount,
+			"repo_root":       r.Root,
+			"repo_id":         r.RepoID,
+			"format_version":  r.FormatVersion,
+			"snapshot_engine": snapshotEngine,
+			"total_worktrees": len(wtList),
+			"total_snapshots": snapshotCount,
 		}
 
 		if jsonOutput {

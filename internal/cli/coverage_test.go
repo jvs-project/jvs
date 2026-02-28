@@ -20,10 +20,10 @@ func TestProgressEnabled(t *testing.T) {
 	}()
 
 	tests := []struct {
-		name        string
-		noProgress  bool
-		jsonOutput  bool
-		expected    bool
+		name       string
+		noProgress bool
+		jsonOutput bool
+		expected   bool
 	}{
 		{"Both false - progress enabled", false, false, true},
 		{"No progress flag set", true, false, false},

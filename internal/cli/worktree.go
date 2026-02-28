@@ -164,7 +164,7 @@ If no name is specified, prints the path of the current worktree.
 Examples:
   jvs worktree path              # Path of current worktree
   jvs worktree path main         # Path of named worktree`,
-	Args:  cobra.MaximumNArgs(1),
+	Args: cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		r := requireRepo()
 
@@ -201,7 +201,7 @@ Changes the worktree name without affecting its content or snapshots.
 
 Examples:
   jvs worktree rename feature-1 feature-branch`,
-	Args:  cobra.ExactArgs(2),
+	Args: cobra.ExactArgs(2),
 	Run: func(cmd *cobra.Command, args []string) {
 		r := requireRepo()
 		oldName := args[0]

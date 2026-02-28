@@ -17,9 +17,9 @@ import (
 )
 
 const (
-workspaceFinalizer       = "jvs.io/workspace-finalizer"
-workspaceRequeueAfter     = 30 * time.Second
-workspaceRequeueOnFailure = 1 * time.Minute
+	workspaceFinalizer        = "jvs.io/workspace-finalizer"
+	workspaceRequeueAfter     = 30 * time.Second
+	workspaceRequeueOnFailure = 1 * time.Minute
 )
 
 // WorkspaceReconciler reconciles a Workspace object

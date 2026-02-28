@@ -30,10 +30,10 @@ func NewRestorer(repoRoot string, engineType model.EngineType) *Restorer {
 
 	auditPath := filepath.Join(repoRoot, ".jvs", "audit", "audit.jsonl")
 	return &Restorer{
-		repoRoot:       repoRoot,
-		engineType:     engineType,
-		engine:         eng,
-		auditLogger:    audit.NewFileAppender(auditPath),
+		repoRoot:    repoRoot,
+		engineType:  engineType,
+		engine:      eng,
+		auditLogger: audit.NewFileAppender(auditPath),
 	}
 }
 

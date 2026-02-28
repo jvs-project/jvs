@@ -67,9 +67,9 @@ type Terminal struct {
 // NewTerminal creates a new terminal progress bar.
 func NewTerminal(op string, total int, enabled bool) *Terminal {
 	t := &Terminal{
-		writer:  os.Stderr,
-		op:      op,
-		total:   total,
+		writer: os.Stderr,
+		op:     op,
+		total:  total,
 	}
 	t.enabled.Store(enabled)
 	t.current.Store(0)
@@ -141,17 +141,17 @@ func (t *Terminal) IsEnabled() bool {
 
 // CountingTerminal is a progress bar for counting operations where the total isn't known upfront.
 type CountingTerminal struct {
-	writer      io.Writer
-	op          string
-	current     atomic.Int32
-	enabled     atomic.Bool
+	writer  io.Writer
+	op      string
+	current atomic.Int32
+	enabled atomic.Bool
 }
 
 // NewCountingTerminal creates a new counting terminal progress bar.
 func NewCountingTerminal(op string, enabled bool) *CountingTerminal {
 	t := &CountingTerminal{
-		writer:  os.Stderr,
-		op:      op,
+		writer: os.Stderr,
+		op:     op,
 	}
 	t.enabled.Store(enabled)
 	t.current.Store(0)

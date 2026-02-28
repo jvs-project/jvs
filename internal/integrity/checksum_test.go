@@ -140,7 +140,7 @@ func TestComputeDescriptorChecksum_EmptyFields(t *testing.T) {
 	// Test checksum with minimal fields
 	desc := &model.Descriptor{
 		SnapshotID:   "1708300800000-a3f7c1b2",
-		WorktreeName:  "main",
+		WorktreeName: "main",
 		Note:         "",
 		Tags:         []string{},
 	}

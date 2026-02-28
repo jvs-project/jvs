@@ -13,12 +13,12 @@ import (
 
 // Result contains verification results for a single snapshot.
 type Result struct {
-	SnapshotID      model.SnapshotID `json:"snapshot_id"`
-	ChecksumValid   bool             `json:"checksum_valid"`
-	PayloadHashValid bool            `json:"payload_hash_valid"`
-	TamperDetected  bool             `json:"tamper_detected"`
-	Severity        string           `json:"severity,omitempty"`
-	Error           string           `json:"error,omitempty"`
+	SnapshotID       model.SnapshotID `json:"snapshot_id"`
+	ChecksumValid    bool             `json:"checksum_valid"`
+	PayloadHashValid bool             `json:"payload_hash_valid"`
+	TamperDetected   bool             `json:"tamper_detected"`
+	Severity         string           `json:"severity,omitempty"`
+	Error            string           `json:"error,omitempty"`
 }
 
 // Verifier performs integrity verification on snapshots.

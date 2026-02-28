@@ -12,9 +12,9 @@ import (
 func TestTerminal_Callback(t *testing.T) {
 	var buf bytes.Buffer
 	term := &Terminal{
-		writer:  &buf,
-		op:      "test-op",
-		total:   100,
+		writer: &buf,
+		op:     "test-op",
+		total:  100,
 	}
 
 	term.enabled.Store(true)

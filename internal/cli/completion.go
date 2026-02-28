@@ -8,8 +8,8 @@ import (
 )
 
 var completionCmd = &cobra.Command{
-	Use:                   "completion [bash|zsh|fish|powershell]",
-	Short:                 "Generate shell completion script",
+	Use:   "completion [bash|zsh|fish|powershell]",
+	Short: "Generate shell completion script",
 	Long: `Generate shell completion script for JVS.
 
 To load completions for your shell:

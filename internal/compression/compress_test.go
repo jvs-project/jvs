@@ -163,8 +163,8 @@ func TestCompressDir(t *testing.T) {
 
 	// Create test files
 	files := map[string]string{
-		"file1.txt": "content 1",
-		"file2.txt": "content 2",
+		"file1.txt":        "content 1",
+		"file2.txt":        "content 2",
 		"subdir/file3.txt": "content 3",
 	}
 	for path, content := range files {
@@ -206,8 +206,8 @@ func TestDecompressDir(t *testing.T) {
 
 	// Create compressed test files
 	files := map[string]string{
-		"file1.txt": "content 1",
-		"file2.txt": "content 2",
+		"file1.txt":        "content 1",
+		"file2.txt":        "content 2",
 		"subdir/file3.txt": "content 3",
 	}
 	for path, content := range files {
@@ -279,9 +279,9 @@ func TestIsCompressedFile(t *testing.T) {
 
 func TestCompressedUncompressedPath(t *testing.T) {
 	tests := []struct {
-		path              string
-		compressed        string
-		uncompressed      string
+		path         string
+		compressed   string
+		uncompressed string
 	}{
 		{"file.txt", "file.txt.gz", "file.txt"},
 		{"file.txt.gz", "file.txt.gz.gz", "file.txt.gz"},
@@ -912,9 +912,9 @@ func TestCompressionLevels_AllValues(t *testing.T) {
 	levels := []CompressionLevel{
 		LevelNone,
 		LevelFast,
-		CompressionLevel(2),  // Custom level
+		CompressionLevel(2), // Custom level
 		LevelDefault,
-		CompressionLevel(7),  // Custom level
+		CompressionLevel(7), // Custom level
 		LevelMax,
 	}
 

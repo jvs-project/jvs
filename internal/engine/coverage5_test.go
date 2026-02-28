@@ -206,11 +206,11 @@ func TestCopyEngine_UnicodeFilenames(t *testing.T) {
 
 	// Create files with unicode names
 	unicodeNames := []string{
-		"файл.txt",         // Russian
-		"文件.txt",          // Chinese
-		"αρχείο.txt",       // Greek
-		"fichier é.txt",    // French
-		"datei ü.txt",      // German
+		"файл.txt",      // Russian
+		"文件.txt",        // Chinese
+		"αρχείο.txt",    // Greek
+		"fichier é.txt", // French
+		"datei ü.txt",   // German
 	}
 
 	for _, name := range unicodeNames {
@@ -303,10 +303,10 @@ func TestJuiceFSEngine_AllFallbackPaths(t *testing.T) {
 			expectedDegraded: true,
 		},
 		{
-			name:              "juicefs available but not on juicefs",
-			setupMockJuiceFS:  true,
-			mockSuccess:       false,
-			expectedDegraded:  true,
+			name:             "juicefs available but not on juicefs",
+			setupMockJuiceFS: true,
+			mockSuccess:      false,
+			expectedDegraded: true,
 		},
 	}
 

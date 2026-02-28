@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	snapshotFinalizer       = "jvs.io/snapshot-finalizer"
+	snapshotFinalizer        = "jvs.io/snapshot-finalizer"
 	snapshotRequeueAfter     = 10 * time.Second
 	snapshotRequeueOnFailure = 30 * time.Second
 )

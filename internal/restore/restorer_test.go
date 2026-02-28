@@ -845,4 +845,3 @@ func TestRestorer_Restore_EmptyBothArgs(t *testing.T) {
 	err := restorer.Restore("", "")
 	assert.Error(t, err)
 }
-

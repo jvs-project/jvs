@@ -26,14 +26,14 @@ const (
 
 // Change represents a single file/directory change between snapshots.
 type Change struct {
-	Path     string     `json:"path"`
-	Type     ChangeType `json:"type"`
-	Mode     os.FileMode `json:"mode,omitempty"`
-	Size     int64      `json:"size,omitempty"`
-	OldSize  int64      `json:"old_size,omitempty"`
-	OldHash  string     `json:"old_hash,omitempty"`
-	NewHash  string     `json:"new_hash,omitempty"`
-	IsSymlink bool      `json:"is_symlink,omitempty"`
+	Path      string      `json:"path"`
+	Type      ChangeType  `json:"type"`
+	Mode      os.FileMode `json:"mode,omitempty"`
+	Size      int64       `json:"size,omitempty"`
+	OldSize   int64       `json:"old_size,omitempty"`
+	OldHash   string      `json:"old_hash,omitempty"`
+	NewHash   string      `json:"new_hash,omitempty"`
+	IsSymlink bool        `json:"is_symlink,omitempty"`
 }
 
 // DiffResult represents the result of comparing two snapshots.

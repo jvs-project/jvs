@@ -51,4 +51,3 @@ func fmtErr(format string, args ...any) {
 	}
 	fmt.Fprintf(os.Stderr, prefix+format+"\n", args...)
 }
-

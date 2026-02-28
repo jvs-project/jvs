@@ -12,11 +12,11 @@ import (
 )
 
 var (
-	jsonOutput   bool
-	debugOutput  bool
-	noProgress   bool
-	noColor      bool
-	rootCmd      = &cobra.Command{
+	jsonOutput  bool
+	debugOutput bool
+	noProgress  bool
+	noColor     bool
+	rootCmd     = &cobra.Command{
 		Use:   "jvs",
 		Short: "JVS - Juicy Versioned Workspaces",
 		Long: `JVS is a snapshot-first, filesystem-native workspace versioning system
@@ -65,4 +65,3 @@ func outputJSON(v any) error {
 	enc.SetIndent("", "  ")
 	return enc.Encode(v)
 }
-

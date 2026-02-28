@@ -15,7 +15,7 @@ import (
 )
 
 var (
-	diffStatOnly  bool
+	diffStatOnly bool
 )
 
 var diffCmd = &cobra.Command{

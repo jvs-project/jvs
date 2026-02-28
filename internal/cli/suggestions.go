@@ -128,4 +128,3 @@ func formatNotInRepositoryError() string {
 
 	return sb.String()
 }
-

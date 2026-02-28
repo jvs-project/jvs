@@ -41,9 +41,9 @@ This creates:
 
 		if jsonOutput {
 			outputJSON(map[string]any{
-				"repo_root":     r.Root,
+				"repo_root":      r.Root,
 				"format_version": r.FormatVersion,
-				"repo_id":       r.RepoID,
+				"repo_id":        r.RepoID,
 			})
 		} else {
 			fmt.Printf("Initialized JVS repository in %s\n", color.Success(repoPath))

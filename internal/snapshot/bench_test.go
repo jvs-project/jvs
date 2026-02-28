@@ -424,7 +424,7 @@ func BenchmarkFindByTag(b *testing.B) {
 // BenchmarkEngineComparison_1KB compares all engines with 1KB payload.
 func BenchmarkEngineComparison_1KB(b *testing.B) {
 	benchmarks := []struct {
-		name  string
+		name   string
 		engine model.EngineType
 	}{
 		{"Copy", model.EngineCopy},
@@ -451,7 +451,7 @@ func BenchmarkEngineComparison_1KB(b *testing.B) {
 // BenchmarkEngineComparison_100KB compares all engines with 100KB payload.
 func BenchmarkEngineComparison_100KB(b *testing.B) {
 	benchmarks := []struct {
-		name  string
+		name   string
 		engine model.EngineType
 	}{
 		{"Copy", model.EngineCopy},
@@ -479,7 +479,7 @@ func BenchmarkEngineComparison_100KB(b *testing.B) {
 // BenchmarkEngineComparison_1MB compares all engines with 1MB payload.
 func BenchmarkEngineComparison_1MB(b *testing.B) {
 	benchmarks := []struct {
-		name  string
+		name   string
 		engine model.EngineType
 	}{
 		{"Copy", model.EngineCopy},
@@ -507,7 +507,7 @@ func BenchmarkEngineComparison_1MB(b *testing.B) {
 // BenchmarkEngineComparison_10MB compares all engines with 10MB payload.
 func BenchmarkEngineComparison_10MB(b *testing.B) {
 	benchmarks := []struct {
-		name  string
+		name   string
 		engine model.EngineType
 	}{
 		{"Copy", model.EngineCopy},
@@ -535,7 +535,7 @@ func BenchmarkEngineComparison_10MB(b *testing.B) {
 // BenchmarkEngineComparison_10Files compares all engines with 10 small files.
 func BenchmarkEngineComparison_10Files(b *testing.B) {
 	benchmarks := []struct {
-		name  string
+		name   string
 		engine model.EngineType
 	}{
 		{"Copy", model.EngineCopy},
@@ -563,7 +563,7 @@ func BenchmarkEngineComparison_10Files(b *testing.B) {
 // BenchmarkEngineComparison_100Files compares all engines with 100 small files.
 func BenchmarkEngineComparison_100Files(b *testing.B) {
 	benchmarks := []struct {
-		name  string
+		name   string
 		engine model.EngineType
 	}{
 		{"Copy", model.EngineCopy},
@@ -591,7 +591,7 @@ func BenchmarkEngineComparison_100Files(b *testing.B) {
 // BenchmarkEngineComparison_1000Files compares all engines with 1000 small files.
 func BenchmarkEngineComparison_1000Files(b *testing.B) {
 	benchmarks := []struct {
-		name  string
+		name   string
 		engine model.EngineType
 	}{
 		{"Copy", model.EngineCopy},
@@ -619,7 +619,7 @@ func BenchmarkEngineComparison_1000Files(b *testing.B) {
 // BenchmarkEngineComparison_Mixed compares all engines with mixed file sizes.
 func BenchmarkEngineComparison_Mixed(b *testing.B) {
 	benchmarks := []struct {
-		name  string
+		name   string
 		engine model.EngineType
 	}{
 		{"Copy", model.EngineCopy},
@@ -667,7 +667,7 @@ func BenchmarkEngineComparison_Mixed(b *testing.B) {
 // BenchmarkEngine_LineageCreation benchmarks creating a chain of snapshots (lineage).
 func BenchmarkEngine_LineageCreation(b *testing.B) {
 	benchmarks := []struct {
-		name  string
+		name   string
 		engine model.EngineType
 	}{
 		{"Copy", model.EngineCopy},
@@ -702,7 +702,7 @@ func BenchmarkEngine_LineageCreation(b *testing.B) {
 // BenchmarkEngine_PartialSnapshot benchmarks partial snapshot creation.
 func BenchmarkEngine_PartialSnapshot(b *testing.B) {
 	benchmarks := []struct {
-		name  string
+		name   string
 		engine model.EngineType
 	}{
 		{"Copy", model.EngineCopy},
@@ -753,7 +753,7 @@ func BenchmarkEngine_PartialSnapshot(b *testing.B) {
 // BenchmarkEngine_SnapshotWithCompression benchmarks snapshot creation with compression.
 func BenchmarkEngine_SnapshotWithCompression(b *testing.B) {
 	benchmarks := []struct {
-		name  string
+		name   string
 		engine model.EngineType
 	}{
 		{"Copy", model.EngineCopy},
@@ -791,7 +791,7 @@ func BenchmarkEngine_SnapshotWithCompression(b *testing.B) {
 // BenchmarkEngine_DeepDirectoryTree benchmarks engines with deeply nested directories.
 func BenchmarkEngine_DeepDirectoryTree(b *testing.B) {
 	benchmarks := []struct {
-		name  string
+		name   string
 		engine model.EngineType
 	}{
 		{"Copy", model.EngineCopy},

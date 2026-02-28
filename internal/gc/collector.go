@@ -19,8 +19,8 @@ import (
 
 // Collector handles garbage collection of unused snapshots.
 type Collector struct {
-	repoRoot       string
-	auditLogger    *audit.FileAppender
+	repoRoot         string
+	auditLogger      *audit.FileAppender
 	progressCallback func(string, int, int, string)
 }
 
