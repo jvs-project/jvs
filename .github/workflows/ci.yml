@@ -185,15 +185,9 @@ jobs:
           cosign sign-blob --yes --output-signature="bin/SHA256SUMS.sig" --output-certificate="bin/SHA256SUMS.pem" "bin/SHA256SUMS"
 
       - name: Upload artifacts to release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
-          files: |
-            bin/jvs-*
-            bin/*.sig
-            bin/*.pem
-            bin/SHA256SUMS*
+          files: bin/*
           body_path: release-notes.md
           draft: false
           prerelease: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
