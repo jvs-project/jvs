@@ -62,9 +62,9 @@ WORKDIR /workspace
 # Copy the binary from builder
 COPY --from=builder /build/jvs /usr/local/bin/jvs
 
-# Copy completion scripts
-COPY --from=builder /build/scripts/completion/jvs.bash /usr/share/bash-completion/completions/jvs 2>/dev/null || true
-COPY --from=builder /build/scripts/completion/jvs.zsh /usr/share/zsh/site-functions/_jvs 2>/dev/null || true
+# Generate completion scripts
+RUN /usr/local/bin/jvs completion bash > /usr/share/bash-completion/completions/jvs 2>/dev/null || true
+RUN /usr/local/bin/jvs completion zsh > /usr/share/zsh/site-functions/_jvs 2>/dev/null || true
 
 # Change ownership to jvs user
 RUN chown -R jvs:jvs /workspace && \
