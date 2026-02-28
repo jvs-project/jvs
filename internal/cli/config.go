@@ -54,7 +54,7 @@ var configShowCmd = &cobra.Command{
 			fmt.Println("default_engine: (not set)")
 		}
 
-		if cfg.DefaultTags != nil && len(cfg.DefaultTags) > 0 {
+		if len(cfg.DefaultTags) > 0 {
 			fmt.Printf("default_tags:\n")
 			for _, tag := range cfg.DefaultTags {
 				fmt.Printf("  - %s\n", tag)
