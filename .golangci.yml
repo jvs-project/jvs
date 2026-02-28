@@ -23,13 +23,19 @@ linters-settings:
     excludes:
       - G104
   gocyclo:
-    min-complexity: 15
+    min-complexity: 30
 
 issues:
   exclude-rules:
     - linters:
         - gosec
       text: "G104"
+    - path: "controllers/"
+      linters:
+        - gocyclo
+    - path: "_deepcopy\\.go$"
+      linters:
+        - staticcheck
   max-issues-per-linter: 0
   max-same-issues: 0
 

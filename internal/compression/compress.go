@@ -111,7 +111,7 @@ func (c *Compressor) CompressFile(path string) (string, error) {
 
 	// Write compressed file
 	compressedPath := path + ".gz"
-	if err := os.WriteFile(compressedPath, compressed, 0644); err != nil {
+	if err := os.WriteFile(compressedPath, compressed, 0600); err != nil {
 		return "", fmt.Errorf("write compressed file: %w", err)
 	}
 

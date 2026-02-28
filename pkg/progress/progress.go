@@ -59,8 +59,8 @@ type Terminal struct {
 	writer      io.Writer
 	op          string
 	total       int
-	current     atomic.Int32
-	lastLineLen atomic.Int32
+	current     atomic.Int64
+	lastLineLen atomic.Int64
 	enabled     atomic.Bool
 }
 
@@ -82,7 +82,7 @@ func (t *Terminal) Callback() Callback {
 		if !t.enabled.Load() {
 			return
 		}
-		t.current.Store(int32(current))
+		t.current.Store(int64(current))
 		t.render(message)
 	}
 }
@@ -90,7 +90,7 @@ func (t *Terminal) Callback() Callback {
 // render draws the progress bar.
 func (t *Terminal) render(message string) {
 	current := t.current.Load()
-	total := int32(t.total)
+	total := int64(t.total)
 
 	if total <= 0 {
 		total = 1
@@ -116,7 +116,7 @@ func (t *Terminal) render(message string) {
 	}
 
 	fmt.Fprint(t.writer, line)
-	t.lastLineLen.Store(int32(len(line)))
+	t.lastLineLen.Store(int64(len(line)))
 }
 
 // Done marks the operation as complete and prints a final newline.
@@ -124,7 +124,7 @@ func (t *Terminal) Done(message string) {
 	if !t.enabled.Load() {
 		return
 	}
-	t.current.Store(int32(t.total))
+	t.current.Store(int64(t.total))
 	t.render(message)
 	fmt.Fprintln(t.writer)
 }
