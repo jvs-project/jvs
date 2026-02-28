@@ -1,8 +1,6 @@
 package cli
 
 import (
-	"bytes"
-	"io"
 	"os"
 	"path/filepath"
 	"testing"
@@ -10,66 +8,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-// TestFmtSuccess_Coverage tests fmtSuccess function.
-func TestFmtSuccess_Coverage(t *testing.T) {
-	// Capture stdout
-	old := os.Stdout
-	r, w, _ := os.Pipe()
-	os.Stdout = w
-
-	fmtSuccess("test success: %s", "value")
-
-	w.Close()
-	os.Stdout = old
-
-	var buf bytes.Buffer
-	io.Copy(&buf, r)
-	output := buf.String()
-
-	assert.Contains(t, output, "test success")
-	assert.Contains(t, output, "value")
-}
-
-// TestFmtWarning_Coverage tests fmtWarning function.
-func TestFmtWarning_Coverage(t *testing.T) {
-	// Capture stderr
-	old := os.Stderr
-	r, w, _ := os.Pipe()
-	os.Stderr = w
-
-	fmtWarning("test warning: %s", "value")
-
-	w.Close()
-	os.Stderr = old
-
-	var buf bytes.Buffer
-	io.Copy(&buf, r)
-	output := buf.String()
-
-	assert.Contains(t, output, "test warning")
-	assert.Contains(t, output, "value")
-}
-
-// TestFmtInfo_Coverage tests fmtInfo function.
-func TestFmtInfo_Coverage(t *testing.T) {
-	// Capture stdout
-	old := os.Stdout
-	r, w, _ := os.Pipe()
-	os.Stdout = w
-
-	fmtInfo("test info: %s", "value")
-
-	w.Close()
-	os.Stdout = old
-
-	var buf bytes.Buffer
-	io.Copy(&buf, r)
-	output := buf.String()
-
-	assert.Contains(t, output, "test info")
-	assert.Contains(t, output, "value")
-}
 
 // TestReadNoteFromStdin_Coverage tests readNoteFromStdin function.
 // Note: This function reads from os.Stdin which is difficult to mock in Go.

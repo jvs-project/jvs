@@ -140,7 +140,7 @@ func DecompressFile(path string) (string, error) {
 
 	// Write decompressed file (remove .gz extension)
 	decompressedPath := strings.TrimSuffix(path, ".gz")
-	if err := os.WriteFile(decompressedPath, decompressed, 0644); err != nil {
+	if err := os.WriteFile(decompressedPath, decompressed, 0600); err != nil {
 		return "", fmt.Errorf("write decompressed file: %w", err)
 	}
 

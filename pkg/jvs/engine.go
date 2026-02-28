@@ -69,7 +69,7 @@ func ValidateEngine(path string, engineType model.EngineType) error {
 		if err := os.MkdirAll(testSrc, 0755); err != nil {
 			return fmt.Errorf("cannot create test source: %w", err)
 		}
-		if err := os.WriteFile(testSrc+"/test", []byte("test"), 0644); err != nil {
+		if err := os.WriteFile(testSrc+"/test", []byte("test"), 0600); err != nil {
 			return fmt.Errorf("cannot write test file: %w", err)
 		}
 

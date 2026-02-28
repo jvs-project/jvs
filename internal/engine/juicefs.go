@@ -150,7 +150,7 @@ func DetectEngine(repoRoot string) (Engine, error) {
 	testDir, err := os.MkdirTemp(repoRoot, ".jvs-reflink-test-")
 	if err == nil {
 		testFile := testDir + "/test"
-		os.WriteFile(testFile, []byte("test"), 0644)
+		os.WriteFile(testFile, []byte("test"), 0600)
 		testClone := testDir + "/clone"
 		info, _ := os.Stat(testFile)
 		if reflinkEngine.reflinkFile(testFile, testClone, info) == nil {

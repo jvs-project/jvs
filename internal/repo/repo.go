@@ -59,13 +59,13 @@ func Init(path string, name string) (*Repo, error) {
 	}
 
 	// Write format_version
-	if err := os.WriteFile(filepath.Join(jvsDir, FormatVersionFile), []byte("1\n"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(jvsDir, FormatVersionFile), []byte("1\n"), 0600); err != nil {
 		return nil, fmt.Errorf("write format_version: %w", err)
 	}
 
 	// Write repo_id
 	repoID := uuidutil.NewV4()
-	if err := os.WriteFile(filepath.Join(jvsDir, RepoIDFile), []byte(repoID+"\n"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(jvsDir, RepoIDFile), []byte(repoID+"\n"), 0600); err != nil {
 		return nil, fmt.Errorf("write repo_id: %w", err)
 	}
 

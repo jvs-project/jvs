@@ -52,29 +52,3 @@ func fmtErr(format string, args ...any) {
 	fmt.Fprintf(os.Stderr, prefix+format+"\n", args...)
 }
 
-// fmtSuccess prints a success message to stdout.
-func fmtSuccess(format string, args ...any) {
-	msg := fmt.Sprintf(format, args...)
-	if color.Enabled() {
-		msg = color.Success(msg)
-	}
-	fmt.Println(msg)
-}
-
-// fmtWarning prints a warning message to stderr.
-func fmtWarning(format string, args ...any) {
-	msg := fmt.Sprintf(format, args...)
-	if color.Enabled() {
-		msg = color.Warning(msg)
-	}
-	fmt.Fprintln(os.Stderr, msg)
-}
-
-// fmtInfo prints an informational message to stdout.
-func fmtInfo(format string, args ...any) {
-	msg := fmt.Sprintf(format, args...)
-	if color.Enabled() {
-		msg = color.Info(msg)
-	}
-	fmt.Println(msg)
-}
