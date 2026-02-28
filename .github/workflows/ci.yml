@@ -169,11 +169,9 @@ jobs:
           echo "\`\`\`" >> release-notes.md
 
       - name: Sign binaries with cosign
-        env:
-          COSIGN_EXPERIMENTAL: 1
         run: |
           for binary in bin/jvs-*; do
-            cosign sign-blob --output-signature="${binary}.sig" --output-certificate="${binary}.pem" "${binary}"
+            cosign sign-blob --yes --output-signature="${binary}.sig" --output-certificate="${binary}.pem" "${binary}"
           done
 
       - name: Create checksums
@@ -183,10 +181,8 @@ jobs:
           cd ..
 
       - name: Sign checksums file
-        env:
-          COSIGN_EXPERIMENTAL: 1
         run: |
-          cosign sign-blob --output-signature="bin/SHA256SUMS.sig" --output-certificate="bin/SHA256SUMS.pem" "bin/SHA256SUMS"
+          cosign sign-blob --yes --output-signature="bin/SHA256SUMS.sig" --output-certificate="bin/SHA256SUMS.pem" "bin/SHA256SUMS"
 
       - name: Upload artifacts to release
         uses: softprops/action-gh-release@v1
