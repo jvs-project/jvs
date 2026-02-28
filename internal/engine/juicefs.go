@@ -153,7 +153,7 @@ func DetectEngine(repoRoot string) (Engine, error) {
 		os.WriteFile(testFile, []byte("test"), 0600)
 		testClone := testDir + "/clone"
 		info, _ := os.Stat(testFile)
-		if reflinkEngine.reflinkFile(testFile, testClone, info) == nil {
+		if reflinkFile(testFile, testClone, info) == nil {
 			os.RemoveAll(testDir)
 			return reflinkEngine, nil
 		}

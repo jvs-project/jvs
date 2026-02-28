@@ -5,7 +5,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"syscall"
 
 	"github.com/jvs-project/jvs/pkg/fsutil"
 	"github.com/jvs-project/jvs/pkg/model"
@@ -31,7 +30,6 @@ func (e *CopyEngine) Name() model.EngineType {
 func (e *CopyEngine) Clone(src, dst string) (*CloneResult, error) {
 	result := &CloneResult{}
 
-	// Track hardlinks to detect degradation
 	seenInodes := make(map[uint64]string)
 
 	err := filepath.Walk(src, func(path string, info os.FileInfo, err error) error {
@@ -45,16 +43,13 @@ func (e *CopyEngine) Clone(src, dst string) (*CloneResult, error) {
 		}
 		dstPath := filepath.Join(dst, rel)
 
-		// Check if this is a hardlink to a previously seen file
 		if !info.IsDir() && info.Mode()&os.ModeSymlink == 0 {
-			stat, ok := info.Sys().(*syscall.Stat_t)
-			if ok {
-				if seenInodes[stat.Ino] != "" {
-					// This is a hardlink, copy engine cannot preserve it
+			if ino, ok := fileInode(info); ok {
+				if seenInodes[ino] != "" {
 					result.Degraded = true
 					result.Degradations = append(result.Degradations, "hardlink")
 				} else {
-					seenInodes[stat.Ino] = path
+					seenInodes[ino] = path
 				}
 			}
 		}
@@ -75,7 +70,6 @@ func (e *CopyEngine) Clone(src, dst string) (*CloneResult, error) {
 		return nil, fmt.Errorf("copy: %w", err)
 	}
 
-	// Fsync the destination directory
 	if err := fsutil.FsyncDir(dst); err != nil {
 		return nil, fmt.Errorf("fsync dst: %w", err)
 	}

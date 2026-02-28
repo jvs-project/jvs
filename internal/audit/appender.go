@@ -10,7 +10,6 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/jvs-project/jvs/pkg/jsonutil"
@@ -33,23 +32,20 @@ func (a *FileAppender) Append(eventType model.AuditEventType, worktreeName strin
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
-	// Ensure directory exists
 	if err := os.MkdirAll(filepath.Dir(a.path), 0755); err != nil {
 		return fmt.Errorf("create audit dir: %w", err)
 	}
 
-	// Open file with exclusive lock
 	file, err := os.OpenFile(a.path, os.O_CREATE|os.O_RDWR, 0644)
 	if err != nil {
 		return fmt.Errorf("open audit log: %w", err)
 	}
 	defer file.Close()
 
-	// Acquire exclusive flock
-	if err := syscall.Flock(int(file.Fd()), syscall.LOCK_EX); err != nil {
+	if err := lockFile(file); err != nil {
 		return fmt.Errorf("flock audit log: %w", err)
 	}
-	defer syscall.Flock(int(file.Fd()), syscall.LOCK_UN)
+	defer unlockFile(file)
 
 	// Get previous record hash
 	prevHash, err := a.getLastRecordHashLocked(file)
