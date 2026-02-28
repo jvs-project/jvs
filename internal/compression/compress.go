@@ -273,8 +273,8 @@ func UncompressedPath(path string) string {
 
 // SnapshotCompressionInfo stores compression metadata in the descriptor.
 type SnapshotCompressionInfo struct {
-	Type  CompressionType     `json:"type,omitempty"`
-	Level CompressionLevel     `json:"level,omitempty"`
+	Type  CompressionType  `json:"type,omitempty"`
+	Level CompressionLevel `json:"level,omitempty"`
 }
 
 // CompressionInfoFromLevel creates compression info from a level string.

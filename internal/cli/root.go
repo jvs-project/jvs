@@ -9,7 +9,6 @@ import (
 
 	"github.com/jvs-project/jvs/pkg/color"
 	"github.com/jvs-project/jvs/pkg/logging"
-	"github.com/jvs-project/jvs/pkg/progress"
 )
 
 var (
@@ -67,31 +66,3 @@ func outputJSON(v any) error {
 	return enc.Encode(v)
 }
 
-// outputJSONOrError prints v as JSON if --json flag is set, or prints error.
-func outputJSONOrError(v any, err error) error {
-	if err != nil {
-		return err
-	}
-	return outputJSON(v)
-}
-
-// newProgressCallback creates a progress callback if progress is enabled.
-func newProgressCallback(op string, total int) progress.Callback {
-	if !progressEnabled() {
-		return progress.Noop
-	}
-	term := progress.NewTerminal(op, total, true)
-	cb := term.Callback()
-	// Return a callback that wraps the terminal callback
-	return func(op string, current, total int, message string) {
-		cb(op, current, total, message)
-		if current == total {
-			term.Done(message)
-		}
-	}
-}
-
-// newCountingProgress creates a counting progress bar for operations with unknown total.
-func newCountingProgress(op string) *progress.CountingTerminal {
-	return progress.NewCountingTerminal(op, progressEnabled())
-}

@@ -129,9 +129,3 @@ func formatNotInRepositoryError() string {
 	return sb.String()
 }
 
-// suggestSnapshotFormat provides information about the expected snapshot ID format.
-func suggestSnapshotFormat() string {
-	return fmt.Sprintf("Expected format: %s (e.g., %s)",
-		color.Code("TIMESTAMP-RANDOM"),
-		color.Code("1771589366482-abc12345"))
-}

@@ -176,11 +176,7 @@ func (r *WorkspaceReconciler) updateSnapshotCount(ctx context.Context, workspace
 	if err := r.List(ctx, snapshots, client.InNamespace(workspace.Namespace), client.MatchingFields{"spec.workspace": workspace.Name}); err != nil {
 		return 0, err
 	}
-	count := len(snapshots.Items)
-	if count > int(^int32(0)) {
-		count = int(^int32(0))
-	}
-	return int32(count), nil
+	return int32(min(len(snapshots.Items), int(^int32(0)))), nil //nolint:gosec // bounded by min
 }
 
 // updateStatus updates the workspace status

@@ -62,75 +62,6 @@ func TestOutputJSONBasicTests(t *testing.T) {
 	})
 }
 
-// TestNewCountingProgress tests the newCountingProgress function.
-func TestNewCountingProgress(t *testing.T) {
-	// Save original state
-	originalNoProgress := noProgress
-	originalJSONOutput := jsonOutput
-	defer func() {
-		noProgress = originalNoProgress
-		jsonOutput = originalJSONOutput
-	}()
-
-	t.Run("Progress enabled", func(t *testing.T) {
-		noProgress = false
-		jsonOutput = false
-		cp := newCountingProgress("test operation")
-		assert.NotNil(t, cp, "counting progress should not be nil")
-	})
-
-	t.Run("Progress disabled via no-progress flag", func(t *testing.T) {
-		noProgress = true
-		jsonOutput = false
-		cp := newCountingProgress("test operation")
-		assert.NotNil(t, cp, "counting progress should not be nil even when disabled")
-	})
-
-	t.Run("Progress disabled via JSON flag", func(t *testing.T) {
-		noProgress = false
-		jsonOutput = true
-		cp := newCountingProgress("test operation")
-		assert.NotNil(t, cp, "counting progress should not be nil even when disabled")
-	})
-}
-
-// TestNewProgressCallback tests the newProgressCallback function.
-func TestNewProgressCallback(t *testing.T) {
-	// Save original state
-	originalNoProgress := noProgress
-	originalJSONOutput := jsonOutput
-	defer func() {
-		noProgress = originalNoProgress
-		jsonOutput = originalJSONOutput
-	}()
-
-	t.Run("Progress disabled returns callback", func(t *testing.T) {
-		noProgress = true
-		jsonOutput = false
-		cb := newProgressCallback("test", 100)
-		assert.NotNil(t, cb, "callback should not be nil even when progress disabled")
-		// Should be able to call without panic
-		cb("test", 50, 100, "halfway")
-	})
-
-	t.Run("JSON output returns callback", func(t *testing.T) {
-		noProgress = false
-		jsonOutput = true
-		cb := newProgressCallback("test", 100)
-		assert.NotNil(t, cb, "callback should not be nil")
-		cb("test", 50, 100, "halfway")
-	})
-
-	t.Run("Progress enabled returns callback", func(t *testing.T) {
-		noProgress = false
-		jsonOutput = false
-		cb := newProgressCallback("test", 100)
-		assert.NotNil(t, cb, "callback should not be nil")
-		cb("test", 50, 100, "halfway")
-		cb("test", 100, 100, "done")
-	})
-}
-
 // TestDetectEngine_Coverage tests the detectEngine function.
 func TestDetectEngine_Coverage(t *testing.T) {
 	t.Run("Non-existent path returns Copy as fallback", func(t *testing.T) {
@@ -157,34 +88,6 @@ func TestDetectEngine_Coverage(t *testing.T) {
 			// Should be one of the valid engines
 			assert.Contains(t, []string{"copy", "reflink-copy", "juicefs-clone"}, string(engine))
 		}
-	})
-}
-
-// TestOutputJSONOrErrorVariations tests outputJSONOrError with various inputs.
-func TestOutputJSONOrErrorVariations(t *testing.T) {
-	// Save original state
-	originalJSONOutput := jsonOutput
-	defer func() {
-		jsonOutput = originalJSONOutput
-	}()
-
-	t.Run("With error returns error", func(t *testing.T) {
-		jsonOutput = true
-		err := outputJSONOrError(nil, assert.AnError)
-		assert.Error(t, err)
-		assert.Equal(t, assert.AnError, err)
-	})
-
-	t.Run("With nil value and nil error", func(t *testing.T) {
-		jsonOutput = true
-		err := outputJSONOrError(nil, nil)
-		assert.NoError(t, err)
-	})
-
-	t.Run("With jsonOutput false does nothing", func(t *testing.T) {
-		jsonOutput = false
-		err := outputJSONOrError(map[string]string{"key": "value"}, nil)
-		assert.NoError(t, err)
 	})
 }
 
@@ -904,72 +807,6 @@ func TestOutputJSON_ErrorHandling(t *testing.T) {
 		val.Next = val
 		err := outputJSON(val)
 		assert.Error(t, err)
-	})
-}
-
-// TestNewCountingProgress_Variations tests newCountingProgress with different scenarios.
-func TestNewCountingProgress_Variations(t *testing.T) {
-	originalNoProgress := noProgress
-	originalJSONOutput := jsonOutput
-	defer func() {
-		noProgress = originalNoProgress
-		jsonOutput = originalJSONOutput
-	}()
-
-	t.Run("Progress with empty operation name", func(t *testing.T) {
-		noProgress = false
-		jsonOutput = false
-		cp := newCountingProgress("")
-		assert.NotNil(t, cp)
-	})
-
-	t.Run("Progress with very long operation name", func(t *testing.T) {
-		noProgress = false
-		jsonOutput = false
-		longName := strings.Repeat("test", 100)
-		cp := newCountingProgress(longName)
-		assert.NotNil(t, cp)
-	})
-
-	t.Run("Progress with special characters in name", func(t *testing.T) {
-		noProgress = false
-		jsonOutput = false
-		cp := newCountingProgress("操作\n处理")
-		assert.NotNil(t, cp)
-	})
-}
-
-// TestNewProgressCallback_Variations tests newProgressCallback edge cases.
-func TestNewProgressCallback_Variations(t *testing.T) {
-	originalNoProgress := noProgress
-	originalJSONOutput := jsonOutput
-	defer func() {
-		noProgress = originalNoProgress
-		jsonOutput = originalJSONOutput
-	}()
-
-	t.Run("Callback with zero total", func(t *testing.T) {
-		noProgress = false
-		jsonOutput = false
-		cb := newProgressCallback("test", 0)
-		assert.NotNil(t, cb)
-		cb("test", 0, 0, "done")
-	})
-
-	t.Run("Callback with negative values", func(t *testing.T) {
-		noProgress = false
-		jsonOutput = false
-		cb := newProgressCallback("test", 100)
-		assert.NotNil(t, cb)
-		cb("test", -1, -1, "negative")
-	})
-
-	t.Run("Callback with current equals total", func(t *testing.T) {
-		noProgress = false
-		jsonOutput = false
-		cb := newProgressCallback("test", 100)
-		assert.NotNil(t, cb)
-		cb("test", 100, 100, "complete")
 	})
 }
 

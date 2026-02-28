@@ -199,30 +199,26 @@ func (d *Differ) buildTree(root, relPath string, tree map[string]*fileInfo) erro
 		var hash string
 		var size int64
 
-		if isSymlink {
-			// For symlinks, hash the target
+		switch {
+		case isSymlink:
 			target, err := os.Readlink(fullEntryPath)
 			if err != nil {
 				return err
 			}
 			hash = hashString(target)
 			size = info.Size()
-		} else if info.IsDir() {
-			// Recurse into directories
+		case info.IsDir():
 			if err := d.buildTree(root, entryPath, tree); err != nil {
 				return err
 			}
-			// Don't add directories to the tree themselves
 			continue
-		} else if info.Mode().IsRegular() {
-			// For regular files, compute hash
+		case info.Mode().IsRegular():
 			hash, err = d.hashFile(fullEntryPath)
 			if err != nil {
 				return err
 			}
 			size = info.Size()
-		} else {
-			// Skip special files (devices, sockets, etc.)
+		default:
 			continue
 		}
 

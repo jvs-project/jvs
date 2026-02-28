@@ -838,24 +838,6 @@ func TestSnapshotCommand_DetachedState(t *testing.T) {
 	os.Chdir(originalWd)
 }
 
-// TestOutputJSONOrError tests the outputJSONOrError helper.
-func TestOutputJSONOrError(t *testing.T) {
-	// Test with no error
-	jsonOutput = true
-	err := outputJSONOrError(map[string]string{"key": "value"}, nil)
-	assert.NoError(t, err)
-
-	// Test with error
-	err = outputJSONOrError(nil, assert.AnError)
-	assert.Error(t, err)
-	assert.Equal(t, assert.AnError, err)
-
-	// Test with jsonOutput=false (should not error even with nil value)
-	jsonOutput = false
-	err = outputJSONOrError(nil, nil)
-	assert.NoError(t, err)
-}
-
 // TestResolveSnapshotID tests the resolveSnapshotID helper function.
 func TestResolveSnapshotID(t *testing.T) {
 	dir := t.TempDir()

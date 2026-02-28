@@ -198,11 +198,12 @@ func (c *Config) Set(key, value string) error {
 		c.OutputFormat = value
 	case "progress_enabled":
 		var enabled bool
-		if value == "true" {
+		switch value {
+		case "true":
 			enabled = true
-		} else if value == "false" {
+		case "false":
 			enabled = false
-		} else {
+		default:
 			return fmt.Errorf("invalid progress_enabled value: %s (must be true or false)", value)
 		}
 		c.ProgressEnabled = &enabled

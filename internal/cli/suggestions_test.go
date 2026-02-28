@@ -14,13 +14,6 @@ func TestSuggestInit(t *testing.T) {
 	assert.Contains(t, result, "create a new repository")
 }
 
-// TestSuggestSnapshotFormat tests the suggestSnapshotFormat function.
-func TestSuggestSnapshotFormat(t *testing.T) {
-	result := suggestSnapshotFormat()
-	assert.Contains(t, result, "TIMESTAMP-RANDOM")
-	assert.Contains(t, result, "1771589366482-abc12345")
-}
-
 // TestFormatNotInRepositoryError tests the formatNotInRepositoryError function.
 func TestFormatNotInRepositoryError(t *testing.T) {
 	result := formatNotInRepositoryError()

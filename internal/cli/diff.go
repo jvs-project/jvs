@@ -15,8 +15,6 @@ import (
 )
 
 var (
-	diffFrom      string
-	diffTo        string
 	diffStatOnly  bool
 )
 
